@@ -1,4 +1,4 @@
-package controller
+package base_controller
 
 import (
 	"CrownDaisy_GOGIN/helper"
@@ -8,12 +8,15 @@ import (
 	"runtime/debug"
 )
 
-func NotFound(c *gin.Context) {
+type BaseController struct {
+}
+
+func (b *BaseController) NotFound(c *gin.Context) {
 	c.JSON(http.StatusNotFound, helper.ReturnResult(helper.CodeNotFoundPage, "page not found", nil))
 	return
 }
 
-func HandleResultPanic(c *gin.Context) {
+func (b *BaseController) HandleResultPanic(c *gin.Context) {
 	defer func() {
 		if r := recover(); r != nil {
 			logger.Debugf("panic occurred: %+v", r)

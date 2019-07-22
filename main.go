@@ -2,8 +2,8 @@ package main
 
 import (
 	"CrownDaisy_GOGIN/config"
-	"CrownDaisy_GOGIN/controller"
-	"CrownDaisy_GOGIN/controller/account_controller"
+	"CrownDaisy_GOGIN/controllers"
+	"CrownDaisy_GOGIN/controllers/account_controller"
 	"CrownDaisy_GOGIN/db"
 	"CrownDaisy_GOGIN/logger"
 	"CrownDaisy_GOGIN/middleware"
@@ -12,18 +12,14 @@ import (
 	"net/http"
 )
 
-func run() {
-	// init config
-	config.DefaultConfigPath = "app.ini"
-	err := config.InitConf()
-	if err != nil {
-		fmt.Printf("init config error: %v", err)
-	}
-	// init logger
-	logger.InitLogger()
+var (
+	base *base_controller.BaseController
+)
+
+func init() {
 
 	// init mysql
-	err = db.InitMysqlDB()
+	err := db.InitMysqlDB()
 	if err != nil {
 		fmt.Printf("init mysql error: %v", err)
 	}
@@ -48,10 +44,10 @@ var (
 func addRoutes(router *gin.Engine) {
 	jwtMid := account_controller.JwtMid
 	router.Use(middleware.MidCors())
-	router.NoRoute(controller.NotFound)
+	router.NoRoute(base.NotFound)
 	//router.Use(account_controller.JwtMid.MiddlewareFunc())
 
-	apiRouter := router.Group("/api", controller.HandleResultPanic)
+	apiRouter := router.Group("/api", base.HandleResultPanic)
 	// no jwt auth
 	{
 		// login and refresh_token
@@ -72,13 +68,12 @@ func addRoutes(router *gin.Engine) {
 		authRouter.POST("/logout")
 	}
 
-	if err := http.ListenAndServe(":5000", router); err != nil {
+	if err := http.ListenAndServe(config.Get().AppPort, router); err != nil {
 		logger.Debugf("http router listen error: %+v", err)
 	}
 	return
 }
 
 func main() {
-	run()
 	addRoutes(gin.Default())
 }

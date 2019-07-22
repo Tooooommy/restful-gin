@@ -1,10 +1,13 @@
 package config
 
 import (
+	"CrownDaisy_GOGIN/lib"
 	"github.com/go-ini/ini"
+	"os"
+	"path/filepath"
 )
 
-var DefaultConfigPath = "app.ini"
+var DefaultConfigPath = "app.dev.ini"
 
 type Mysql struct {
 	Host              string `ini:"host"`
@@ -71,6 +74,7 @@ type QQ struct {
 
 type Config struct {
 	AppMode   string `ini:"app_mode"`
+	AppPort   string `ini:"app_port"`
 	PwdSecret string `ini:"pwd_secret"`
 	Mysql     `ini:"mysql"`
 	Redis     `ini:"redis"`
@@ -83,16 +87,48 @@ type Config struct {
 
 var cfg *Config
 
-func InitConf() error {
-	cfg = new(Config)
-	return ini.MapTo(&cfg, DefaultConfigPath)
+func init() {
+	Init()
 }
 
 func Get() *Config {
 	if cfg == nil {
-		if err := InitConf(); err != nil {
-			panic(err)
-		}
+		Init()
 	}
 	return cfg
+}
+
+func SetMode(mode string) {
+	if mode == "pro" {
+		DefaultConfigPath = "app.pro.ini"
+	} else {
+		DefaultConfigPath = "app.dev.ini"
+	}
+	// 重新设置Init
+	Init()
+}
+
+func Init() {
+	cfg = new(Config)
+	path := DefaultConfigPath
+
+	// main.go run
+	if !utils.IsFileExist(DefaultConfigPath) {
+		path = filepath.Join("config", DefaultConfigPath)
+	}
+
+	// test.go
+	if !utils.IsFileExist(path) {
+		if os.Chdir("../") == nil {
+			path = filepath.Join("config", DefaultConfigPath)
+		}
+		if !utils.IsFileExist(path) {
+			if os.Chdir("../") == nil {
+				path = filepath.Join("config", DefaultConfigPath)
+			}
+		}
+	}
+	if err := ini.MapTo(&cfg, path); err != nil {
+		panic(err)
+	}
 }

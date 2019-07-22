@@ -176,10 +176,10 @@ func Println(args ...interface{}) {
 }
 
 func init() {
-	InitLogger()
+	Init()
 }
 
-func InitLogger() {
+func Init() {
 	logger = logrus.New()
 	cfg := config.Get().Logger
 	logger.SetLevel(getLevelByConf(cfg.Level))
