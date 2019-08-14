@@ -49,7 +49,6 @@ func (w *WorkerWithFunc) run() {
 		defer func() {
 			if p := recover(); p != nil {
 				w.pool.decRunning()
-				w.pool.workerCache.Put(w)
 				if w.pool.PanicHandler != nil {
 					w.pool.PanicHandler(p)
 				} else {
@@ -59,15 +58,13 @@ func (w *WorkerWithFunc) run() {
 		}()
 
 		for args := range w.args {
-			if nil == args {
+			if args == nil {
 				w.pool.decRunning()
 				w.pool.workerCache.Put(w)
 				return
 			}
 			w.pool.poolFunc(args)
-			if ok := w.pool.revertWorker(w); !ok {
-				break
-			}
+			w.pool.revertWorker(w)
 		}
 	}()
 }

@@ -189,8 +189,6 @@ var (
 	ErrNoCookieJar = errors.New("Cookie jar is not available")
 	// ErrNoPattern is the error type for LimitRules without patterns
 	ErrNoPattern = errors.New("No pattern defined in LimitRule")
-	// ErrEmptyProxyURL is the error type for empty Proxy URL list
-	ErrEmptyProxyURL = errors.New("Proxy URL list is empty")
 )
 
 var envMap = map[string]func(*Collector, string){
@@ -499,7 +497,10 @@ func (c *Collector) scrape(u, method string, depth int, requestData io.Reader, c
 	if err != nil {
 		return err
 	}
-	if !c.isDomainAllowed(parsedURL.Hostname()) {
+	if parsedURL.Scheme == "" {
+		parsedURL.Scheme = "http"
+	}
+	if !c.isDomainAllowed(parsedURL.Host) {
 		return ErrForbiddenDomain
 	}
 	if method != "HEAD" && !c.IgnoreRobotsTxt {
@@ -514,12 +515,6 @@ func (c *Collector) scrape(u, method string, depth int, requestData io.Reader, c
 	if !ok && requestData != nil {
 		rc = ioutil.NopCloser(requestData)
 	}
-	// The Go HTTP API ignores "Host" in the headers, preferring the client
-	// to use the Host field on Request.
-	host := parsedURL.Host
-	if hostHeader := hdr.Get("Host"); hostHeader != "" {
-		host = hostHeader
-	}
 	req := &http.Request{
 		Method:     method,
 		URL:        parsedURL,
@@ -528,7 +523,7 @@ func (c *Collector) scrape(u, method string, depth int, requestData io.Reader, c
 		ProtoMinor: 1,
 		Header:     hdr,
 		Body:       rc,
-		Host:       host,
+		Host:       parsedURL.Host,
 	}
 	setRequestBody(req, requestData)
 	u = parsedURL.String()
@@ -701,8 +696,6 @@ func (c *Collector) checkRobots(u *url.URL) error {
 		if err != nil {
 			return err
 		}
-		defer resp.Body.Close()
-
 		robot, err = robotstxt.FromResponse(resp)
 		if err != nil {
 			return err
@@ -717,11 +710,7 @@ func (c *Collector) checkRobots(u *url.URL) error {
 		return nil
 	}
 
-	eu := u.EscapedPath()
-	if u.RawQuery != "" {
-		eu += "?" + u.Query().Encode()
-	}
-	if !uaGroup.Test(eu) {
+	if !uaGroup.Test(u.EscapedPath()) {
 		return ErrRobotsTxtBlocked
 	}
 	return nil
@@ -862,7 +851,7 @@ func (c *Collector) DisableCookies() {
 }
 
 // SetCookieJar overrides the previously set cookie jar
-func (c *Collector) SetCookieJar(j http.CookieJar) {
+func (c *Collector) SetCookieJar(j *cookiejar.Jar) {
 	c.backend.Client.Jar = j
 }
 
@@ -983,8 +972,7 @@ func (c *Collector) handleOnXML(resp *Response) error {
 		return nil
 	}
 	contentType := strings.ToLower(resp.Headers.Get("Content-Type"))
-	isXMLFile := strings.HasSuffix(strings.ToLower(resp.Request.URL.Path), ".xml") || strings.HasSuffix(strings.ToLower(resp.Request.URL.Path), ".xml.gz")
-	if !strings.Contains(contentType, "html") && (!strings.Contains(contentType, "xml") && !isXMLFile) {
+	if !strings.Contains(contentType, "html") && !strings.Contains(contentType, "xml") {
 		return nil
 	}
 
@@ -1014,7 +1002,7 @@ func (c *Collector) handleOnXML(resp *Response) error {
 				cc.Function(e)
 			}
 		}
-	} else if strings.Contains(contentType, "xml") || isXMLFile {
+	} else if strings.Contains(contentType, "xml") {
 		doc, err := xmlquery.Parse(bytes.NewBuffer(resp.Body))
 		if err != nil {
 			return err
@@ -1129,7 +1117,6 @@ func (c *Collector) Clone() *Collector {
 		MaxDepth:               c.MaxDepth,
 		DisallowedURLFilters:   c.DisallowedURLFilters,
 		URLFilters:             c.URLFilters,
-		CheckHead:              c.CheckHead,
 		ParseHTTPErrorResponse: c.ParseHTTPErrorResponse,
 		UserAgent:              c.UserAgent,
 		store:                  c.store,
@@ -1151,7 +1138,7 @@ func (c *Collector) Clone() *Collector {
 
 func (c *Collector) checkRedirectFunc() func(req *http.Request, via []*http.Request) error {
 	return func(req *http.Request, via []*http.Request) error {
-		if !c.isDomainAllowed(req.URL.Hostname()) {
+		if !c.isDomainAllowed(req.URL.Host) {
 			return fmt.Errorf("Not following redirect to %s because its not in AllowedDomains", req.URL.Host)
 		}
 
@@ -1165,6 +1152,13 @@ func (c *Collector) checkRedirectFunc() func(req *http.Request, via []*http.Requ
 		}
 
 		lastRequest := via[len(via)-1]
+
+		// Copy the headers from last request
+		for hName, hValues := range lastRequest.Header {
+			for _, hValue := range hValues {
+				req.Header.Set(hName, hValue)
+			}
+		}
 
 		// If domain has changed, remove the Authorization-header if it exists
 		if req.URL.Host != lastRequest.URL.Host {

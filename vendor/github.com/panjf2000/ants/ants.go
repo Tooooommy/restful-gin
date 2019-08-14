@@ -29,20 +29,16 @@ import (
 )
 
 const (
-	// DEFAULT_ANTS_POOL_SIZE is the default capacity for a default goroutine pool.
-	DEFAULT_ANTS_POOL_SIZE = math.MaxInt32
+	// DefaultAntsPoolSize is the default capacity for a default goroutine pool.
+	DefaultAntsPoolSize = math.MaxInt32
 
-	// DEFAULT_CLEAN_INTERVAL_TIME is the interval time to clean up goroutines.
-	DEFAULT_CLEAN_INTERVAL_TIME = 1
-
-	// CLOSED represents that the pool is closed.
-	CLOSED = 1
+	// DefaultCleanIntervalTime is the interval time to clean up goroutines.
+	DefaultCleanIntervalTime = 5
 )
 
 var (
 	// Error types for the Ants API.
 	//---------------------------------------------------------------------------
-
 	// ErrInvalidPoolSize will be returned when setting a negative number as pool capacity.
 	ErrInvalidPoolSize = errors.New("invalid size for pool")
 
@@ -68,11 +64,10 @@ var (
 		// new connections if WorkerFunc is CPU-bound.
 		return 1
 	}()
-
-	defaultAntsPool, _ = NewPool(DEFAULT_ANTS_POOL_SIZE)
 )
 
 // Init a instance pool when importing ants.
+var defaultAntsPool, _ = NewPool(DefaultAntsPoolSize)
 
 // Submit submits a task to pool.
 func Submit(task func()) error {

@@ -31,12 +31,11 @@ func GenAccessToken(accountID string) (string, error) {
 
 func ParseAccessToken(accessToken string) (string, string, error) {
 	var claims = &CustomClaims{}
-	cfg := config.Get()
 	token, err := jwt.ParseWithClaims(accessToken, claims, func(token *jwt.Token) (i interface{}, e error) {
 		if _, ok := token.Method.(*jwt.SigningMethodECDSA); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}
-		return []byte(cfg.Secret), nil
+		return []byte(config.Get().App.Secret), nil
 	})
 
 	if !token.Valid {

@@ -28,3 +28,18 @@ func (b *BaseController) HandleResultPanic(c *gin.Context) {
 	}()
 	c.Next()
 }
+
+func (b *BaseController) Assert(bo bool, res *helper.Result) {
+	if !bo {
+		panic(res)
+	}
+}
+
+func (b *BaseController) CheckErr(err error, res *helper.Result) {
+	if err != nil {
+		b.Assert(false, res)
+	}
+}
+
+func (b *BaseController) GetCurrentUser()   {}
+func (b *BaseController) GetCurrentUserId() {}

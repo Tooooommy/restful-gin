@@ -68,7 +68,7 @@ func addRoutes(router *gin.Engine) {
 		authRouter.POST("/logout")
 	}
 
-	if err := http.ListenAndServe(config.Get().AppPort, router); err != nil {
+	if err := http.ListenAndServe(config.Get().App.Port, router); err != nil {
 		logger.Debugf("http router listen error: %+v", err)
 	}
 	return

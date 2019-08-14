@@ -21,9 +21,8 @@ func Md5(part string) string {
 }
 
 func GenPwd(password string) string {
-	cfg := config.Get()
 	hash := md5.New()
-	_, _ = io.WriteString(hash, cfg.PwdSecret)
+	_, _ = io.WriteString(hash, config.Get().App.Secret)
 	_, _ = io.WriteString(hash, password)
 	return string(hash.Sum(nil))
 }

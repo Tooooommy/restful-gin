@@ -5,9 +5,9 @@
 [![Build Status](https://travis-ci.org/go-gormigrate/gormigrate.svg?branch=master)](https://travis-ci.org/go-gormigrate/gormigrate)
 [![Build status](https://ci.appveyor.com/api/projects/status/89e414sklbwefyyp?svg=true)](https://ci.appveyor.com/project/andreynering/gormigrate)
 
-Gormigrate is a minimalistic migration helper for [Gorm][gorm].
+Gormigrate is a migration helper for [Gorm][gorm].
 Gorm already has useful [migrate functions][gormmigrate], just misses
-proper schema versioning and migration rollback support.
+proper schema versioning and rollback capabilities.
 
 ## Supported databases
 
@@ -130,7 +130,7 @@ m.InitSchema(func(tx *gorm.DB) error {
 		&Person{},
 		&Pet{},
 		// all other tables of you app
-	).Error
+	)
 	if err != nil {
 		return err
 	}
@@ -181,14 +181,6 @@ go test -tags sqlserver
 
 # running test for multiple databases at once
 go test -tags 'sqlite postgresql mysql'
-```
-
-Or altenatively, you could use Docker to easily run tests on all databases
-at once. To do that, make sure Docker is installed and running in your machine
-and then run:
-
-```bash
-task docker
 ```
 
 [gorm]: http://gorm.io/

@@ -21,6 +21,22 @@ const defEncByteBufSize = 1 << 10 // 4:16, 6:64, 8:256, 10:1024
 
 var errEncoderNotInitialized = errors.New("Encoder not initialized")
 
+/*
+
+// encWriter abstracts writing to a byte array or to an io.Writer.
+//
+//
+// Deprecated: Use encWriterSwitch instead.
+type encWriter interface {
+	writeb([]byte)
+	writestr(string)
+	writen1(byte)
+	writen2(byte, byte)
+	end()
+}
+
+*/
+
 // encDriver abstracts the actual codec (binc vs msgpack, etc)
 type encDriver interface {
 	EncodeNil()
@@ -30,8 +46,12 @@ type encDriver interface {
 	EncodeFloat32(f float32)
 	EncodeFloat64(f float64)
 	// encodeExtPreamble(xtag byte, length int)
-	EncodeRawExt(re *RawExt)
-	EncodeExt(v interface{}, xtag uint64, ext Ext)
+	EncodeRawExt(re *RawExt, e *Encoder)
+	EncodeExt(v interface{}, xtag uint64, ext Ext, e *Encoder)
+	// Deprecated: use EncodeStringEnc instead
+	EncodeString(c charEncoding, v string)
+	// Deprecated: use EncodeStringBytesRaw instead
+	EncodeStringBytes(c charEncoding, v []byte)
 	EncodeStringEnc(c charEncoding, v string) // c cannot be cRAW
 	// EncodeSymbol(v string)
 	EncodeStringBytesRaw(v []byte)
@@ -39,18 +59,15 @@ type encDriver interface {
 	//encBignum(f *big.Int)
 	//encStringRunes(c charEncoding, v []rune)
 	WriteArrayStart(length int)
+	WriteArrayElem()
 	WriteArrayEnd()
 	WriteMapStart(length int)
+	WriteMapElemKey()
+	WriteMapElemValue()
 	WriteMapEnd()
 
 	reset()
 	atEndOfEncode()
-}
-
-type encDriverContainerTracker interface {
-	WriteArrayElem()
-	WriteMapElemKey()
-	WriteMapElemValue()
 }
 
 type encDriverAsis interface {
@@ -68,27 +85,32 @@ func (e encodeError) Error() string {
 type encDriverNoopContainerWriter struct{}
 
 func (encDriverNoopContainerWriter) WriteArrayStart(length int) {}
+func (encDriverNoopContainerWriter) WriteArrayElem()            {}
 func (encDriverNoopContainerWriter) WriteArrayEnd()             {}
 func (encDriverNoopContainerWriter) WriteMapStart(length int)   {}
+func (encDriverNoopContainerWriter) WriteMapElemKey()           {}
+func (encDriverNoopContainerWriter) WriteMapElemValue()         {}
 func (encDriverNoopContainerWriter) WriteMapEnd()               {}
 func (encDriverNoopContainerWriter) atEndOfEncode()             {}
 
-// func (encDriverNoopContainerWriter) WriteArrayElem()            {}
-// func (encDriverNoopContainerWriter) WriteMapElemKey()           {}
-// func (encDriverNoopContainerWriter) WriteMapElemValue()         {}
+type encDriverTrackContainerWriter struct {
+	c containerState
+}
 
-// type encDriverTrackContainerWriter struct {
-// 	c containerState
+func (e *encDriverTrackContainerWriter) WriteArrayStart(length int) { e.c = containerArrayStart }
+func (e *encDriverTrackContainerWriter) WriteArrayElem()            { e.c = containerArrayElem }
+func (e *encDriverTrackContainerWriter) WriteArrayEnd()             { e.c = containerArrayEnd }
+func (e *encDriverTrackContainerWriter) WriteMapStart(length int)   { e.c = containerMapStart }
+func (e *encDriverTrackContainerWriter) WriteMapElemKey()           { e.c = containerMapKey }
+func (e *encDriverTrackContainerWriter) WriteMapElemValue()         { e.c = containerMapValue }
+func (e *encDriverTrackContainerWriter) WriteMapEnd()               { e.c = containerMapEnd }
+func (e *encDriverTrackContainerWriter) atEndOfEncode()             {}
+
+// type ioEncWriterWriter interface {
+// 	WriteByte(c byte) error
+// 	WriteString(s string) (n int, err error)
+// 	Write(p []byte) (n int, err error)
 // }
-
-// func (e *encDriverTrackContainerWriter) WriteArrayStart(length int) { e.c = containerArrayStart }
-// func (e *encDriverTrackContainerWriter) WriteArrayElem()            { e.c = containerArrayElem }
-// func (e *encDriverTrackContainerWriter) WriteArrayEnd()             { e.c = containerArrayEnd }
-// func (e *encDriverTrackContainerWriter) WriteMapStart(length int)   { e.c = containerMapStart }
-// func (e *encDriverTrackContainerWriter) WriteMapElemKey()           { e.c = containerMapKey }
-// func (e *encDriverTrackContainerWriter) WriteMapElemValue()         { e.c = containerMapValue }
-// func (e *encDriverTrackContainerWriter) WriteMapEnd()               { e.c = containerMapEnd }
-// func (e *encDriverTrackContainerWriter) atEndOfEncode()             {}
 
 // EncodeOptions captures configuration options during encode.
 type EncodeOptions struct {
@@ -177,12 +199,241 @@ type EncodeOptions struct {
 
 // ---------------------------------------------
 
+/*
+
+type ioEncStringWriter interface {
+	WriteString(s string) (n int, err error)
+}
+
+// ioEncWriter implements encWriter and can write to an io.Writer implementation
+type ioEncWriter struct {
+	w  io.Writer
+	ww io.Writer
+	bw io.ByteWriter
+	sw ioEncStringWriter
+	fw ioFlusher
+	b  [8]byte
+}
+
+func (z *ioEncWriter) reset(w io.Writer) {
+	z.w = w
+	var ok bool
+	if z.bw, ok = w.(io.ByteWriter); !ok {
+		z.bw = z
+	}
+	if z.sw, ok = w.(ioEncStringWriter); !ok {
+		z.sw = z
+	}
+	z.fw, _ = w.(ioFlusher)
+	z.ww = w
+}
+
+func (z *ioEncWriter) WriteByte(b byte) (err error) {
+	z.b[0] = b
+	_, err = z.w.Write(z.b[:1])
+	return
+}
+
+func (z *ioEncWriter) WriteString(s string) (n int, err error) {
+	return z.w.Write(bytesView(s))
+}
+
+func (z *ioEncWriter) writeb(bs []byte) {
+	if _, err := z.ww.Write(bs); err != nil {
+		panic(err)
+	}
+}
+
+func (z *ioEncWriter) writestr(s string) {
+	if _, err := z.sw.WriteString(s); err != nil {
+		panic(err)
+	}
+}
+
+func (z *ioEncWriter) writen1(b byte) {
+	if err := z.bw.WriteByte(b); err != nil {
+		panic(err)
+	}
+}
+
+func (z *ioEncWriter) writen2(b1, b2 byte) {
+	var err error
+	if err = z.bw.WriteByte(b1); err == nil {
+		if err = z.bw.WriteByte(b2); err == nil {
+			return
+		}
+	}
+	panic(err)
+}
+
+// func (z *ioEncWriter) writen5(b1, b2, b3, b4, b5 byte) {
+// 	z.b[0], z.b[1], z.b[2], z.b[3], z.b[4] = b1, b2, b3, b4, b5
+// 	if _, err := z.ww.Write(z.b[:5]); err != nil {
+// 		panic(err)
+// 	}
+// }
+
+//go:noinline - so *encWriterSwitch.XXX has the bytesEncAppender.XXX inlined
+func (z *ioEncWriter) end() {
+	if z.fw != nil {
+		if err := z.fw.Flush(); err != nil {
+			panic(err)
+		}
+	}
+}
+
+*/
+
+// ---------------------------------------------
+
+// bufioEncWriter
+type bufioEncWriter struct {
+	buf []byte
+	w   io.Writer
+	n   int
+	sz  int // buf size
+
+	// Extensions can call Encode() within a current Encode() call.
+	// We need to know when the top level Encode() call returns,
+	// so we can decide whether to Release() or not.
+	calls uint16 // what depth in mustDecode are we in now.
+
+	_ [6]uint8 // padding
+
+	bytesBufPooler
+
+	_ [1]uint64 // padding
+	// a int
+	// b   [4]byte
+	// err
+}
+
+func (z *bufioEncWriter) reset(w io.Writer, bufsize int) {
+	z.w = w
+	z.n = 0
+	z.calls = 0
+	if bufsize <= 0 {
+		bufsize = defEncByteBufSize
+	}
+	z.sz = bufsize
+	if cap(z.buf) >= bufsize {
+		z.buf = z.buf[:cap(z.buf)]
+	} else {
+		z.buf = z.bytesBufPooler.get(bufsize)
+		// z.buf = make([]byte, bufsize)
+	}
+}
+
+func (z *bufioEncWriter) release() {
+	z.buf = nil
+	z.bytesBufPooler.end()
+}
+
+//go:noinline - flush only called intermittently
+func (z *bufioEncWriter) flushErr() (err error) {
+	n, err := z.w.Write(z.buf[:z.n])
+	z.n -= n
+	if z.n > 0 && err == nil {
+		err = io.ErrShortWrite
+	}
+	if n > 0 && z.n > 0 {
+		copy(z.buf, z.buf[n:z.n+n])
+	}
+	return err
+}
+
+func (z *bufioEncWriter) flush() {
+	if err := z.flushErr(); err != nil {
+		panic(err)
+	}
+}
+
+func (z *bufioEncWriter) writeb(s []byte) {
+LOOP:
+	a := len(z.buf) - z.n
+	if len(s) > a {
+		z.n += copy(z.buf[z.n:], s[:a])
+		s = s[a:]
+		z.flush()
+		goto LOOP
+	}
+	z.n += copy(z.buf[z.n:], s)
+}
+
+func (z *bufioEncWriter) writestr(s string) {
+	// z.writeb(bytesView(s)) // inlined below
+LOOP:
+	a := len(z.buf) - z.n
+	if len(s) > a {
+		z.n += copy(z.buf[z.n:], s[:a])
+		s = s[a:]
+		z.flush()
+		goto LOOP
+	}
+	z.n += copy(z.buf[z.n:], s)
+}
+
+func (z *bufioEncWriter) writen1(b1 byte) {
+	if 1 > len(z.buf)-z.n {
+		z.flush()
+	}
+	z.buf[z.n] = b1
+	z.n++
+}
+
+func (z *bufioEncWriter) writen2(b1, b2 byte) {
+	if 2 > len(z.buf)-z.n {
+		z.flush()
+	}
+	z.buf[z.n+1] = b2
+	z.buf[z.n] = b1
+	z.n += 2
+}
+
+func (z *bufioEncWriter) endErr() (err error) {
+	if z.n > 0 {
+		err = z.flushErr()
+	}
+	return
+}
+
+// ---------------------------------------------
+
+// bytesEncAppender implements encWriter and can write to an byte slice.
+type bytesEncAppender struct {
+	b   []byte
+	out *[]byte
+}
+
+func (z *bytesEncAppender) writeb(s []byte) {
+	z.b = append(z.b, s...)
+}
+func (z *bytesEncAppender) writestr(s string) {
+	z.b = append(z.b, s...)
+}
+func (z *bytesEncAppender) writen1(b1 byte) {
+	z.b = append(z.b, b1)
+}
+func (z *bytesEncAppender) writen2(b1, b2 byte) {
+	z.b = append(z.b, b1, b2)
+}
+func (z *bytesEncAppender) endErr() error {
+	*(z.out) = z.b
+	return nil
+}
+func (z *bytesEncAppender) reset(in []byte, out *[]byte) {
+	z.b = in[:0]
+	z.out = out
+}
+
+// ---------------------------------------------
+
 func (e *Encoder) rawExt(f *codecFnInfo, rv reflect.Value) {
-	e.e.EncodeRawExt(rv2i(rv).(*RawExt))
+	e.e.EncodeRawExt(rv2i(rv).(*RawExt), e)
 }
 
 func (e *Encoder) ext(f *codecFnInfo, rv reflect.Value) {
-	e.e.EncodeExt(rv2i(rv), f.xfTag, f.xfFn)
+	e.e.EncodeExt(rv2i(rv), f.xfTag, f.xfFn, e)
 }
 
 func (e *Encoder) selferMarshal(f *codecFnInfo, rv reflect.Value) {
@@ -208,90 +459,6 @@ func (e *Encoder) raw(f *codecFnInfo, rv reflect.Value) {
 	e.rawBytes(rv2i(rv).(Raw))
 }
 
-func (e *Encoder) kBool(f *codecFnInfo, rv reflect.Value) {
-	e.e.EncodeBool(rvGetBool(rv))
-}
-
-func (e *Encoder) kTime(f *codecFnInfo, rv reflect.Value) {
-	e.e.EncodeTime(rvGetTime(rv))
-}
-
-func (e *Encoder) kString(f *codecFnInfo, rv reflect.Value) {
-	if e.h.StringToRaw {
-		e.e.EncodeStringBytesRaw(bytesView(rvGetString(rv)))
-	} else {
-		e.e.EncodeStringEnc(cUTF8, rvGetString(rv))
-	}
-}
-
-// func (e *Encoder) kString(f *codecFnInfo, rv reflect.Value) {
-// 	if e.h.StringToRaw {
-// 		e.kStringToRaw(f, rv)
-// 	} else {
-// 		e.kStringEnc(f, rv)
-// 	}
-// }
-
-// func (e *Encoder) kStringToRaw(f *codecFnInfo, rv reflect.Value) {
-// 	e.e.EncodeStringBytesRaw(bytesView(rvGetString(rv)))
-// }
-
-// func (e *Encoder) kStringEnc(f *codecFnInfo, rv reflect.Value) {
-// 	e.e.EncodeStringEnc(cUTF8, rvGetString(rv))
-// }
-
-func (e *Encoder) kFloat64(f *codecFnInfo, rv reflect.Value) {
-	e.e.EncodeFloat64(rvGetFloat64(rv))
-}
-
-func (e *Encoder) kFloat32(f *codecFnInfo, rv reflect.Value) {
-	e.e.EncodeFloat32(rvGetFloat32(rv))
-}
-
-func (e *Encoder) kInt(f *codecFnInfo, rv reflect.Value) {
-	e.e.EncodeInt(int64(rvGetInt(rv)))
-}
-
-func (e *Encoder) kInt8(f *codecFnInfo, rv reflect.Value) {
-	e.e.EncodeInt(int64(rvGetInt8(rv)))
-}
-
-func (e *Encoder) kInt16(f *codecFnInfo, rv reflect.Value) {
-	e.e.EncodeInt(int64(rvGetInt16(rv)))
-}
-
-func (e *Encoder) kInt32(f *codecFnInfo, rv reflect.Value) {
-	e.e.EncodeInt(int64(rvGetInt32(rv)))
-}
-
-func (e *Encoder) kInt64(f *codecFnInfo, rv reflect.Value) {
-	e.e.EncodeInt(int64(rvGetInt64(rv)))
-}
-
-func (e *Encoder) kUint(f *codecFnInfo, rv reflect.Value) {
-	e.e.EncodeUint(uint64(rvGetUint(rv)))
-}
-
-func (e *Encoder) kUint8(f *codecFnInfo, rv reflect.Value) {
-	e.e.EncodeUint(uint64(rvGetUint8(rv)))
-}
-
-func (e *Encoder) kUint16(f *codecFnInfo, rv reflect.Value) {
-	e.e.EncodeUint(uint64(rvGetUint16(rv)))
-}
-
-func (e *Encoder) kUint32(f *codecFnInfo, rv reflect.Value) {
-	e.e.EncodeUint(uint64(rvGetUint32(rv)))
-}
-
-func (e *Encoder) kUint64(f *codecFnInfo, rv reflect.Value) {
-	e.e.EncodeUint(uint64(rvGetUint64(rv)))
-}
-
-func (e *Encoder) kUintptr(f *codecFnInfo, rv reflect.Value) {
-	e.e.EncodeUint(uint64(rvGetUintptr(rv)))
-}
-
 func (e *Encoder) kInvalid(f *codecFnInfo, rv reflect.Value) {
 	e.e.EncodeNil()
 }
@@ -300,88 +467,142 @@ func (e *Encoder) kErr(f *codecFnInfo, rv reflect.Value) {
 	e.errorf("unsupported kind %s, for %#v", rv.Kind(), rv)
 }
 
-func chanToSlice(rv reflect.Value, rtelem reflect.Type, timeout time.Duration) (rvcs reflect.Value) {
-	// TODO: ensure this doesn't mess up anywhere that rv of kind chan is expected
-	rvcs = reflect.Zero(reflect.SliceOf(rtelem))
-	if timeout < 0 { // consume until close
-		for {
-			recv, recvOk := rv.Recv()
-			if !recvOk {
-				break
-			}
-			rvcs = reflect.Append(rvcs, recv)
-		}
-	} else {
-		cases := make([]reflect.SelectCase, 2)
-		cases[0] = reflect.SelectCase{Dir: reflect.SelectRecv, Chan: rv}
-		if timeout == 0 {
-			cases[1] = reflect.SelectCase{Dir: reflect.SelectDefault}
-		} else {
-			tt := time.NewTimer(timeout)
-			cases[1] = reflect.SelectCase{Dir: reflect.SelectRecv, Chan: rv4i(tt.C)}
-		}
-		for {
-			chosen, recv, recvOk := reflect.Select(cases)
-			if chosen == 1 || !recvOk {
-				break
-			}
-			rvcs = reflect.Append(rvcs, recv)
-		}
-	}
-	return
-}
-
 func (e *Encoder) kSlice(f *codecFnInfo, rv reflect.Value) {
+	ti := f.ti
+	ee := e.e
 	// array may be non-addressable, so we have to manage with care
 	//   (don't call rv.Bytes, rv.Slice, etc).
 	// E.g. type struct S{B [2]byte};
 	//   Encode(S{}) will bomb on "panic: slice of unaddressable array".
-	mbs := f.ti.mbs
 	if f.seq != seqTypeArray {
-		if rvIsNil(rv) {
-			e.e.EncodeNil()
+		if rv.IsNil() {
+			ee.EncodeNil()
 			return
 		}
 		// If in this method, then there was no extension function defined.
 		// So it's okay to treat as []byte.
-		if !mbs && f.ti.rtid == uint8SliceTypId {
-			e.e.EncodeStringBytesRaw(rvGetBytes(rv))
+		if ti.rtid == uint8SliceTypId {
+			ee.EncodeStringBytesRaw(rv.Bytes())
 			return
 		}
 	}
-	if f.seq == seqTypeChan && f.ti.chandir&uint8(reflect.RecvDir) == 0 {
+	if f.seq == seqTypeChan && ti.chandir&uint8(reflect.RecvDir) == 0 {
 		e.errorf("send-only channel cannot be encoded")
 	}
-	rtelem := f.ti.elem
-
+	elemsep := e.esep
+	rtelem := ti.elem
+	rtelemIsByte := uint8TypId == rt2id(rtelem) // NOT rtelem.Kind() == reflect.Uint8
 	var l int
 	// if a slice, array or chan of bytes, treat specially
-	if !mbs && uint8TypId == rt2id(rtelem) { // NOT rtelem.Kind() == reflect.Uint8
+	if rtelemIsByte {
 		switch f.seq {
 		case seqTypeSlice:
-			e.e.EncodeStringBytesRaw(rvGetBytes(rv))
+			ee.EncodeStringBytesRaw(rv.Bytes())
 		case seqTypeArray:
-			e.e.EncodeStringBytesRaw(rvGetArrayBytesRO(rv, e.b[:]))
+			l = rv.Len()
+			if rv.CanAddr() {
+				ee.EncodeStringBytesRaw(rv.Slice(0, l).Bytes())
+			} else {
+				var bs []byte
+				if l <= cap(e.b) {
+					bs = e.b[:l]
+				} else {
+					bs = make([]byte, l)
+				}
+				reflect.Copy(reflect.ValueOf(bs), rv)
+				ee.EncodeStringBytesRaw(bs)
+			}
 		case seqTypeChan:
-			e.kSliceBytesChan(rv)
+			// do not use range, so that the number of elements encoded
+			// does not change, and encoding does not hang waiting on someone to close chan.
+			// for b := range rv2i(rv).(<-chan byte) { bs = append(bs, b) }
+			// ch := rv2i(rv).(<-chan byte) // fix error - that this is a chan byte, not a <-chan byte.
+
+			if rv.IsNil() {
+				ee.EncodeNil()
+				break
+			}
+			bs := e.b[:0]
+			irv := rv2i(rv)
+			ch, ok := irv.(<-chan byte)
+			if !ok {
+				ch = irv.(chan byte)
+			}
+
+		L1:
+			switch timeout := e.h.ChanRecvTimeout; {
+			case timeout == 0: // only consume available
+				for {
+					select {
+					case b := <-ch:
+						bs = append(bs, b)
+					default:
+						break L1
+					}
+				}
+			case timeout > 0: // consume until timeout
+				tt := time.NewTimer(timeout)
+				for {
+					select {
+					case b := <-ch:
+						bs = append(bs, b)
+					case <-tt.C:
+						// close(tt.C)
+						break L1
+					}
+				}
+			default: // consume until close
+				for b := range ch {
+					bs = append(bs, b)
+				}
+			}
+
+			ee.EncodeStringBytesRaw(bs)
 		}
 		return
 	}
 
 	// if chan, consume chan into a slice, and work off that slice.
 	if f.seq == seqTypeChan {
-		rv = chanToSlice(rv, rtelem, e.h.ChanRecvTimeout)
+		rvcs := reflect.Zero(reflect.SliceOf(rtelem))
+		timeout := e.h.ChanRecvTimeout
+		if timeout < 0 { // consume until close
+			for {
+				recv, recvOk := rv.Recv()
+				if !recvOk {
+					break
+				}
+				rvcs = reflect.Append(rvcs, recv)
+			}
+		} else {
+			cases := make([]reflect.SelectCase, 2)
+			cases[0] = reflect.SelectCase{Dir: reflect.SelectRecv, Chan: rv}
+			if timeout == 0 {
+				cases[1] = reflect.SelectCase{Dir: reflect.SelectDefault}
+			} else {
+				tt := time.NewTimer(timeout)
+				cases[1] = reflect.SelectCase{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(tt.C)}
+			}
+			for {
+				chosen, recv, recvOk := reflect.Select(cases)
+				if chosen == 1 || !recvOk {
+					break
+				}
+				rvcs = reflect.Append(rvcs, recv)
+			}
+		}
+		rv = rvcs // TODO: ensure this doesn't mess up anywhere that rv of kind chan is expected
 	}
 
-	l = rv.Len() // rv may be slice or array
-	if mbs {
+	l = rv.Len()
+	if ti.mbs {
 		if l%2 == 1 {
 			e.errorf("mapBySlice requires even slice length, but got %v", l)
 			return
 		}
-		e.mapStart(l / 2)
+		ee.WriteMapStart(l / 2)
 	} else {
-		e.arrayStart(l)
+		ee.WriteArrayStart(l)
 	}
 
 	if l > 0 {
@@ -393,124 +614,107 @@ func (e *Encoder) kSlice(f *codecFnInfo, rv reflect.Value) {
 		// encoding type, because preEncodeValue may break it down to
 		// a concrete type and kInterface will bomb.
 		if rtelem.Kind() != reflect.Interface {
-			fn = e.h.fn(rtelem)
+			fn = e.h.fn(rtelem, true, true)
 		}
 		for j := 0; j < l; j++ {
-			if mbs {
-				if j%2 == 0 {
-					e.mapElemKey()
+			if elemsep {
+				if ti.mbs {
+					if j%2 == 0 {
+						ee.WriteMapElemKey()
+					} else {
+						ee.WriteMapElemValue()
+					}
 				} else {
-					e.mapElemValue()
+					ee.WriteArrayElem()
 				}
-			} else {
-				e.arrayElem()
 			}
-			e.encodeValue(rv.Index(j), fn)
+			e.encodeValue(rv.Index(j), fn, true)
 		}
 	}
 
-	if mbs {
-		e.mapEnd()
+	if ti.mbs {
+		ee.WriteMapEnd()
 	} else {
-		e.arrayEnd()
+		ee.WriteArrayEnd()
 	}
-}
-
-func (e *Encoder) kSliceBytesChan(rv reflect.Value) {
-	// do not use range, so that the number of elements encoded
-	// does not change, and encoding does not hang waiting on someone to close chan.
-	// for b := range rv2i(rv).(<-chan byte) { bs = append(bs, b) }
-	// ch := rv2i(rv).(<-chan byte) // fix error - that this is a chan byte, not a <-chan byte.
-
-	// if rvIsNil(rv) {
-	// 	e.e.EncodeNil()
-	// 	return
-	// }
-
-	bs := e.b[:0]
-	irv := rv2i(rv)
-	ch, ok := irv.(<-chan byte)
-	if !ok {
-		ch = irv.(chan byte)
-	}
-
-L1:
-	switch timeout := e.h.ChanRecvTimeout; {
-	case timeout == 0: // only consume available
-		for {
-			select {
-			case b := <-ch:
-				bs = append(bs, b)
-			default:
-				break L1
-			}
-		}
-	case timeout > 0: // consume until timeout
-		tt := time.NewTimer(timeout)
-		for {
-			select {
-			case b := <-ch:
-				bs = append(bs, b)
-			case <-tt.C:
-				// close(tt.C)
-				break L1
-			}
-		}
-	default: // consume until close
-		for b := range ch {
-			bs = append(bs, b)
-		}
-	}
-
-	e.e.EncodeStringBytesRaw(bs)
 }
 
 func (e *Encoder) kStructNoOmitempty(f *codecFnInfo, rv reflect.Value) {
+	fti := f.ti
+	tisfi := fti.sfiSrc
+	toMap := !(fti.toArray || e.h.StructToArray)
+	if toMap {
+		tisfi = fti.sfiSort
+	}
+
+	ee := e.e
+
 	sfn := structFieldNode{v: rv, update: false}
-	if f.ti.toArray || e.h.StructToArray { // toArray
-		e.arrayStart(len(f.ti.sfiSrc))
-		for _, si := range f.ti.sfiSrc {
-			e.arrayElem()
-			e.encodeValue(sfn.field(si), nil)
+	if toMap {
+		ee.WriteMapStart(len(tisfi))
+		if e.esep {
+			for _, si := range tisfi {
+				ee.WriteMapElemKey()
+				e.kStructFieldKey(fti.keyType, si.encNameAsciiAlphaNum, si.encName)
+				ee.WriteMapElemValue()
+				e.encodeValue(sfn.field(si), nil, true)
+			}
+		} else {
+			for _, si := range tisfi {
+				e.kStructFieldKey(fti.keyType, si.encNameAsciiAlphaNum, si.encName)
+				e.encodeValue(sfn.field(si), nil, true)
+			}
 		}
-		e.arrayEnd()
+		ee.WriteMapEnd()
 	} else {
-		e.mapStart(len(f.ti.sfiSort))
-		for _, si := range f.ti.sfiSort {
-			e.mapElemKey()
-			e.kStructFieldKey(f.ti.keyType, si.encNameAsciiAlphaNum, si.encName)
-			e.mapElemValue()
-			e.encodeValue(sfn.field(si), nil)
+		ee.WriteArrayStart(len(tisfi))
+		if e.esep {
+			for _, si := range tisfi {
+				ee.WriteArrayElem()
+				e.encodeValue(sfn.field(si), nil, true)
+			}
+		} else {
+			for _, si := range tisfi {
+				e.encodeValue(sfn.field(si), nil, true)
+			}
 		}
-		e.mapEnd()
+		ee.WriteArrayEnd()
 	}
 }
 
 func (e *Encoder) kStructFieldKey(keyType valueType, encNameAsciiAlphaNum bool, encName string) {
-	encStructFieldKey(encName, e.e, e.w(), keyType, encNameAsciiAlphaNum, e.js)
+	encStructFieldKey(encName, e.e, e.w, keyType, encNameAsciiAlphaNum, e.js)
 }
 
 func (e *Encoder) kStruct(f *codecFnInfo, rv reflect.Value) {
+	fti := f.ti
+	elemsep := e.esep
+	tisfi := fti.sfiSrc
 	var newlen int
-	toMap := !(f.ti.toArray || e.h.StructToArray)
+	toMap := !(fti.toArray || e.h.StructToArray)
 	var mf map[string]interface{}
-	if f.ti.isFlag(tiflagMissingFielder) {
+	if f.ti.mf {
 		mf = rv2i(rv).(MissingFielder).CodecMissingFields()
 		toMap = true
 		newlen += len(mf)
-	} else if f.ti.isFlag(tiflagMissingFielderPtr) {
+	} else if f.ti.mfp {
 		if rv.CanAddr() {
 			mf = rv2i(rv.Addr()).(MissingFielder).CodecMissingFields()
 		} else {
 			// make a new addressable value of same one, and use it
 			rv2 := reflect.New(rv.Type())
-			rvSetDirect(rv2.Elem(), rv)
+			rv2.Elem().Set(rv)
 			mf = rv2i(rv2).(MissingFielder).CodecMissingFields()
 		}
 		toMap = true
 		newlen += len(mf)
 	}
-	newlen += len(f.ti.sfiSrc)
+	// if toMap, use the sorted array. If toArray, use unsorted array (to match sequence in struct)
+	if toMap {
+		tisfi = fti.sfiSort
+	}
+	newlen += len(tisfi)
+	ee := e.e
 
 	// Use sync.Pool to reduce allocating slices unnecessarily.
 	// The cost of sync.Pool is less than the cost of new allocation.
@@ -528,75 +732,86 @@ func (e *Encoder) kStruct(f *codecFnInfo, rv reflect.Value) {
 	var spool sfiRvPooler
 	var fkvs = spool.get(newlen)
 
+	var kv sfiRv
 	recur := e.h.RecursiveEmptyCheck
 	sfn := structFieldNode{v: rv, update: false}
-
-	var kv sfiRv
-	var j int
-	if toMap {
-		newlen = 0
-		for _, si := range f.ti.sfiSort { // use sorted array
-			// kv.r = si.field(rv, false)
-			kv.r = sfn.field(si)
+	newlen = 0
+	for _, si := range tisfi {
+		// kv.r = si.field(rv, false)
+		kv.r = sfn.field(si)
+		if toMap {
 			if si.omitEmpty() && isEmptyValue(kv.r, e.h.TypeInfos, recur, recur) {
 				continue
 			}
 			kv.v = si // si.encName
-			fkvs[newlen] = kv
-			newlen++
-		}
-		var mflen int
-		for k, v := range mf {
-			if k == "" {
-				delete(mf, k)
-				continue
-			}
-			if f.ti.infoFieldOmitempty && isEmptyValue(rv4i(v), e.h.TypeInfos, recur, recur) {
-				delete(mf, k)
-				continue
-			}
-			mflen++
-		}
-		// encode it all
-		e.mapStart(newlen + mflen)
-		for j = 0; j < newlen; j++ {
-			kv = fkvs[j]
-			e.mapElemKey()
-			e.kStructFieldKey(f.ti.keyType, kv.v.encNameAsciiAlphaNum, kv.v.encName)
-			e.mapElemValue()
-			e.encodeValue(kv.r, nil)
-		}
-		// now, add the others
-		for k, v := range mf {
-			e.mapElemKey()
-			e.kStructFieldKey(f.ti.keyType, false, k)
-			e.mapElemValue()
-			e.encode(v)
-		}
-		e.mapEnd()
-	} else {
-		newlen = len(f.ti.sfiSrc)
-		// kv.v = nil
-		for i, si := range f.ti.sfiSrc { // use unsorted array (to match sequence in struct)
-			// kv.r = si.field(rv, false)
-			kv.r = sfn.field(si)
+		} else {
 			// use the zero value.
 			// if a reference or struct, set to nil (so you do not output too much)
 			if si.omitEmpty() && isEmptyValue(kv.r, e.h.TypeInfos, recur, recur) {
 				switch kv.r.Kind() {
-				case reflect.Struct, reflect.Interface, reflect.Ptr, reflect.Array, reflect.Map, reflect.Slice:
+				case reflect.Struct, reflect.Interface, reflect.Ptr,
+					reflect.Array, reflect.Map, reflect.Slice:
 					kv.r = reflect.Value{} //encode as nil
 				}
 			}
-			fkvs[i] = kv
 		}
-		// encode it all
-		e.arrayStart(newlen)
-		for j = 0; j < newlen; j++ {
-			e.arrayElem()
-			e.encodeValue(fkvs[j].r, nil)
+		fkvs[newlen] = kv
+		newlen++
+	}
+	fkvs = fkvs[:newlen]
+
+	var mflen int
+	for k, v := range mf {
+		if k == "" {
+			delete(mf, k)
+			continue
 		}
-		e.arrayEnd()
+		if fti.infoFieldOmitempty && isEmptyValue(reflect.ValueOf(v), e.h.TypeInfos, recur, recur) {
+			delete(mf, k)
+			continue
+		}
+		mflen++
+	}
+
+	var j int
+	if toMap {
+		ee.WriteMapStart(newlen + mflen)
+		if elemsep {
+			for j = 0; j < len(fkvs); j++ {
+				kv = fkvs[j]
+				ee.WriteMapElemKey()
+				e.kStructFieldKey(fti.keyType, kv.v.encNameAsciiAlphaNum, kv.v.encName)
+				ee.WriteMapElemValue()
+				e.encodeValue(kv.r, nil, true)
+			}
+		} else {
+			for j = 0; j < len(fkvs); j++ {
+				kv = fkvs[j]
+				e.kStructFieldKey(fti.keyType, kv.v.encNameAsciiAlphaNum, kv.v.encName)
+				e.encodeValue(kv.r, nil, true)
+			}
+		}
+		// now, add the others
+		for k, v := range mf {
+			ee.WriteMapElemKey()
+			e.kStructFieldKey(fti.keyType, false, k)
+			ee.WriteMapElemValue()
+			e.encode(v)
+		}
+		ee.WriteMapEnd()
+	} else {
+		ee.WriteArrayStart(newlen)
+		if elemsep {
+			for j = 0; j < len(fkvs); j++ {
+				ee.WriteArrayElem()
+				e.encodeValue(fkvs[j].r, nil, true)
+			}
+		} else {
+			for j = 0; j < len(fkvs); j++ {
+				e.encodeValue(fkvs[j].r, nil, true)
+			}
+		}
+		ee.WriteArrayEnd()
 	}
 
 	// do not use defer. Instead, use explicit pool return at end of function.
@@ -606,18 +821,18 @@ func (e *Encoder) kStruct(f *codecFnInfo, rv reflect.Value) {
 }
 
 func (e *Encoder) kMap(f *codecFnInfo, rv reflect.Value) {
-	if rvIsNil(rv) {
-		e.e.EncodeNil()
+	ee := e.e
+	if rv.IsNil() {
+		ee.EncodeNil()
 		return
 	}
 
 	l := rv.Len()
-	e.mapStart(l)
+	ee.WriteMapStart(l)
 	if l == 0 {
-		e.mapEnd()
+		ee.WriteMapEnd()
 		return
 	}
-
 	// var asSymbols bool
 	// determine the underlying key and val encFn's for the map.
 	// This eliminates some work which is done for each loop iteration i.e.
@@ -627,69 +842,66 @@ func (e *Encoder) kMap(f *codecFnInfo, rv reflect.Value) {
 	// encoding type, because preEncodeValue may break it down to
 	// a concrete type and kInterface will bomb.
 	var keyFn, valFn *codecFn
-
-	// rtkeyid := rt2id(f.ti.key)
-	ktypeKind := f.ti.key.Kind()
-	vtypeKind := f.ti.elem.Kind()
-
-	rtval := f.ti.elem
-	rtvalkind := vtypeKind
-	for rtvalkind == reflect.Ptr {
+	ti := f.ti
+	rtkey0 := ti.key
+	rtkey := rtkey0
+	rtval0 := ti.elem
+	rtval := rtval0
+	// rtkeyid := rt2id(rtkey0)
+	for rtval.Kind() == reflect.Ptr {
 		rtval = rtval.Elem()
-		rtvalkind = rtval.Kind()
 	}
-	if rtvalkind != reflect.Interface {
-		valFn = e.h.fn(rtval)
+	if rtval.Kind() != reflect.Interface {
+		valFn = e.h.fn(rtval, true, true)
 	}
-
-	var rvv = mapAddressableRV(f.ti.elem, vtypeKind)
+	mks := rv.MapKeys()
 
 	if e.h.Canonical {
-		e.kMapCanonical(f.ti.key, f.ti.elem, rv, rvv, valFn)
-		e.mapEnd()
+		e.kMapCanonical(rtkey, rv, mks, valFn)
+		ee.WriteMapEnd()
 		return
 	}
 
-	rtkey := f.ti.key
-	var keyTypeIsString = stringTypId == rt2id(rtkey) // rtkeyid
+	var keyTypeIsString = stringTypId == rt2id(rtkey0) // rtkeyid
 	if !keyTypeIsString {
 		for rtkey.Kind() == reflect.Ptr {
 			rtkey = rtkey.Elem()
 		}
 		if rtkey.Kind() != reflect.Interface {
 			// rtkeyid = rt2id(rtkey)
-			keyFn = e.h.fn(rtkey)
+			keyFn = e.h.fn(rtkey, true, true)
 		}
 	}
 
-	var rvk = mapAddressableRV(f.ti.key, ktypeKind)
-
-	it := mapRange(rv, rvk, rvv, true)
-	for it.Next() {
-		e.mapElemKey()
+	// for j, lmks := 0, len(mks); j < lmks; j++ {
+	for j := range mks {
+		if e.esep {
+			ee.WriteMapElemKey()
+		}
 		if keyTypeIsString {
 			if e.h.StringToRaw {
-				e.e.EncodeStringBytesRaw(bytesView(it.Key().String()))
+				ee.EncodeStringBytesRaw(bytesView(mks[j].String()))
 			} else {
-				e.e.EncodeStringEnc(cUTF8, it.Key().String())
+				ee.EncodeStringEnc(cUTF8, mks[j].String())
 			}
 		} else {
-			e.encodeValue(it.Key(), keyFn)
+			e.encodeValue(mks[j], keyFn, true)
 		}
-		e.mapElemValue()
-		iv := it.Value()
-		e.encodeValue(iv, valFn)
-	}
-	it.Done()
+		if e.esep {
+			ee.WriteMapElemValue()
+		}
+		e.encodeValue(rv.MapIndex(mks[j]), valFn, true)
 
-	e.mapEnd()
+	}
+	ee.WriteMapEnd()
 }
 
-func (e *Encoder) kMapCanonical(rtkey, rtval reflect.Type, rv, rvv reflect.Value, valFn *codecFn) {
+func (e *Encoder) kMapCanonical(rtkey reflect.Type, rv reflect.Value, mks []reflect.Value, valFn *codecFn) {
+	ee := e.e
+	elemsep := e.esep
 	// we previously did out-of-band if an extension was registered.
 	// This is not necessary, as the natural kind is sufficient for ordering.
 
-	mks := rv.MapKeys()
 	switch rtkey.Kind() {
 	case reflect.Bool:
 		mksv := make([]boolRv, len(mks))
@@ -700,10 +912,14 @@ func (e *Encoder) kMapCanonical(rtkey, rtval reflect.Type, rv, rvv reflect.Value
 		}
 		sort.Sort(boolRvSlice(mksv))
 		for i := range mksv {
-			e.mapElemKey()
-			e.e.EncodeBool(mksv[i].v)
-			e.mapElemValue()
-			e.encodeValue(mapGet(rv, mksv[i].r, rvv), valFn) // e.encodeValue(rv.MapIndex(mksv[i].r), valFn)
+			if elemsep {
+				ee.WriteMapElemKey()
+			}
+			ee.EncodeBool(mksv[i].v)
+			if elemsep {
+				ee.WriteMapElemValue()
+			}
+			e.encodeValue(rv.MapIndex(mksv[i].r), valFn, true)
 		}
 	case reflect.String:
 		mksv := make([]stringRv, len(mks))
@@ -714,73 +930,93 @@ func (e *Encoder) kMapCanonical(rtkey, rtval reflect.Type, rv, rvv reflect.Value
 		}
 		sort.Sort(stringRvSlice(mksv))
 		for i := range mksv {
-			e.mapElemKey()
-			if e.h.StringToRaw {
-				e.e.EncodeStringBytesRaw(bytesView(mksv[i].v))
-			} else {
-				e.e.EncodeStringEnc(cUTF8, mksv[i].v)
+			if elemsep {
+				ee.WriteMapElemKey()
 			}
-			e.mapElemValue()
-			e.encodeValue(mapGet(rv, mksv[i].r, rvv), valFn) // e.encodeValue(rv.MapIndex(mksv[i].r), valFn)
+			if e.h.StringToRaw {
+				ee.EncodeStringBytesRaw(bytesView(mksv[i].v))
+			} else {
+				ee.EncodeStringEnc(cUTF8, mksv[i].v)
+			}
+			if elemsep {
+				ee.WriteMapElemValue()
+			}
+			e.encodeValue(rv.MapIndex(mksv[i].r), valFn, true)
 		}
 	case reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uint, reflect.Uintptr:
-		mksv := make([]uint64Rv, len(mks))
+		mksv := make([]uintRv, len(mks))
 		for i, k := range mks {
 			v := &mksv[i]
 			v.r = k
 			v.v = k.Uint()
 		}
-		sort.Sort(uint64RvSlice(mksv))
+		sort.Sort(uintRvSlice(mksv))
 		for i := range mksv {
-			e.mapElemKey()
-			e.e.EncodeUint(mksv[i].v)
-			e.mapElemValue()
-			e.encodeValue(mapGet(rv, mksv[i].r, rvv), valFn) // e.encodeValue(rv.MapIndex(mksv[i].r), valFn)
+			if elemsep {
+				ee.WriteMapElemKey()
+			}
+			ee.EncodeUint(mksv[i].v)
+			if elemsep {
+				ee.WriteMapElemValue()
+			}
+			e.encodeValue(rv.MapIndex(mksv[i].r), valFn, true)
 		}
 	case reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64, reflect.Int:
-		mksv := make([]int64Rv, len(mks))
+		mksv := make([]intRv, len(mks))
 		for i, k := range mks {
 			v := &mksv[i]
 			v.r = k
 			v.v = k.Int()
 		}
-		sort.Sort(int64RvSlice(mksv))
+		sort.Sort(intRvSlice(mksv))
 		for i := range mksv {
-			e.mapElemKey()
-			e.e.EncodeInt(mksv[i].v)
-			e.mapElemValue()
-			e.encodeValue(mapGet(rv, mksv[i].r, rvv), valFn) // e.encodeValue(rv.MapIndex(mksv[i].r), valFn)
+			if elemsep {
+				ee.WriteMapElemKey()
+			}
+			ee.EncodeInt(mksv[i].v)
+			if elemsep {
+				ee.WriteMapElemValue()
+			}
+			e.encodeValue(rv.MapIndex(mksv[i].r), valFn, true)
 		}
 	case reflect.Float32:
-		mksv := make([]float64Rv, len(mks))
+		mksv := make([]floatRv, len(mks))
 		for i, k := range mks {
 			v := &mksv[i]
 			v.r = k
 			v.v = k.Float()
 		}
-		sort.Sort(float64RvSlice(mksv))
+		sort.Sort(floatRvSlice(mksv))
 		for i := range mksv {
-			e.mapElemKey()
-			e.e.EncodeFloat32(float32(mksv[i].v))
-			e.mapElemValue()
-			e.encodeValue(mapGet(rv, mksv[i].r, rvv), valFn) // e.encodeValue(rv.MapIndex(mksv[i].r), valFn)
+			if elemsep {
+				ee.WriteMapElemKey()
+			}
+			ee.EncodeFloat32(float32(mksv[i].v))
+			if elemsep {
+				ee.WriteMapElemValue()
+			}
+			e.encodeValue(rv.MapIndex(mksv[i].r), valFn, true)
 		}
 	case reflect.Float64:
-		mksv := make([]float64Rv, len(mks))
+		mksv := make([]floatRv, len(mks))
 		for i, k := range mks {
 			v := &mksv[i]
 			v.r = k
 			v.v = k.Float()
 		}
-		sort.Sort(float64RvSlice(mksv))
+		sort.Sort(floatRvSlice(mksv))
 		for i := range mksv {
-			e.mapElemKey()
-			e.e.EncodeFloat64(mksv[i].v)
-			e.mapElemValue()
-			e.encodeValue(mapGet(rv, mksv[i].r, rvv), valFn) // e.encodeValue(rv.MapIndex(mksv[i].r), valFn)
+			if elemsep {
+				ee.WriteMapElemKey()
+			}
+			ee.EncodeFloat64(mksv[i].v)
+			if elemsep {
+				ee.WriteMapElemValue()
+			}
+			e.encodeValue(rv.MapIndex(mksv[i].r), valFn, true)
 		}
 	case reflect.Struct:
-		if rtkey == timeTyp {
+		if rv.Type() == timeTyp {
 			mksv := make([]timeRv, len(mks))
 			for i, k := range mks {
 				v := &mksv[i]
@@ -789,10 +1025,14 @@ func (e *Encoder) kMapCanonical(rtkey, rtval reflect.Type, rv, rvv reflect.Value
 			}
 			sort.Sort(timeRvSlice(mksv))
 			for i := range mksv {
-				e.mapElemKey()
-				e.e.EncodeTime(mksv[i].v)
-				e.mapElemValue()
-				e.encodeValue(mapGet(rv, mksv[i].r, rvv), valFn)
+				if elemsep {
+					ee.WriteMapElemKey()
+				}
+				ee.EncodeTime(mksv[i].v)
+				if elemsep {
+					ee.WriteMapElemValue()
+				}
+				e.encodeValue(rv.MapIndex(mksv[i].r), valFn, true)
 			}
 			break
 		}
@@ -800,8 +1040,7 @@ func (e *Encoder) kMapCanonical(rtkey, rtval reflect.Type, rv, rvv reflect.Value
 	default:
 		// out-of-band
 		// first encode each key to a []byte first, then sort them, then record
-		var bufp bytesBufPooler
-		var mksv []byte = bufp.get(len(mks) * 16)[:0]
+		var mksv []byte = make([]byte, 0, len(mks)*16) // temporary byte slice for the encoding
 		e2 := NewEncoderBytes(&mksv, e.hh)
 		mksbv := make([]bytesRv, len(mks))
 		for i, k := range mks {
@@ -813,14 +1052,168 @@ func (e *Encoder) kMapCanonical(rtkey, rtval reflect.Type, rv, rvv reflect.Value
 		}
 		sort.Sort(bytesRvSlice(mksbv))
 		for j := range mksbv {
-			e.mapElemKey()
+			if elemsep {
+				ee.WriteMapElemKey()
+			}
 			e.asis(mksbv[j].v)
-			e.mapElemValue()
-			e.encodeValue(mapGet(rv, mksbv[j].r, rvv), valFn)
+			if elemsep {
+				ee.WriteMapElemValue()
+			}
+			e.encodeValue(rv.MapIndex(mksbv[j].r), valFn, true)
 		}
-		bufp.end()
 	}
 }
+
+// // --------------------------------------------------
+
+type encWriterSwitch struct {
+	// wi   *ioEncWriter
+	wb bytesEncAppender
+	wf *bufioEncWriter
+	// typ  entryType
+	bytes bool    // encoding to []byte
+	esep  bool    // whether it has elem separators
+	isas  bool    // whether e.as != nil
+	js    bool    // is json encoder?
+	be    bool    // is binary encoder?
+	_     [2]byte // padding
+	// _    [2]uint64 // padding
+	// _    uint64    // padding
+}
+
+func (z *encWriterSwitch) writeb(s []byte) {
+	if z.bytes {
+		z.wb.writeb(s)
+	} else {
+		z.wf.writeb(s)
+	}
+}
+func (z *encWriterSwitch) writestr(s string) {
+	if z.bytes {
+		z.wb.writestr(s)
+	} else {
+		z.wf.writestr(s)
+	}
+}
+func (z *encWriterSwitch) writen1(b1 byte) {
+	if z.bytes {
+		z.wb.writen1(b1)
+	} else {
+		z.wf.writen1(b1)
+	}
+}
+func (z *encWriterSwitch) writen2(b1, b2 byte) {
+	if z.bytes {
+		z.wb.writen2(b1, b2)
+	} else {
+		z.wf.writen2(b1, b2)
+	}
+}
+func (z *encWriterSwitch) endErr() error {
+	if z.bytes {
+		return z.wb.endErr()
+	}
+	return z.wf.endErr()
+}
+
+func (z *encWriterSwitch) end() {
+	if err := z.endErr(); err != nil {
+		panic(err)
+	}
+}
+
+/*
+
+// ------------------------------------------
+func (z *encWriterSwitch) writeb(s []byte) {
+	switch z.typ {
+	case entryTypeBytes:
+		z.wb.writeb(s)
+	case entryTypeIo:
+		z.wi.writeb(s)
+	default:
+		z.wf.writeb(s)
+	}
+}
+func (z *encWriterSwitch) writestr(s string) {
+	switch z.typ {
+	case entryTypeBytes:
+		z.wb.writestr(s)
+	case entryTypeIo:
+		z.wi.writestr(s)
+	default:
+		z.wf.writestr(s)
+	}
+}
+func (z *encWriterSwitch) writen1(b1 byte) {
+	switch z.typ {
+	case entryTypeBytes:
+		z.wb.writen1(b1)
+	case entryTypeIo:
+		z.wi.writen1(b1)
+	default:
+		z.wf.writen1(b1)
+	}
+}
+func (z *encWriterSwitch) writen2(b1, b2 byte) {
+	switch z.typ {
+	case entryTypeBytes:
+		z.wb.writen2(b1, b2)
+	case entryTypeIo:
+		z.wi.writen2(b1, b2)
+	default:
+		z.wf.writen2(b1, b2)
+	}
+}
+func (z *encWriterSwitch) end() {
+	switch z.typ {
+	case entryTypeBytes:
+		z.wb.end()
+	case entryTypeIo:
+		z.wi.end()
+	default:
+		z.wf.end()
+	}
+}
+
+// ------------------------------------------
+func (z *encWriterSwitch) writeb(s []byte) {
+	if z.bytes {
+		z.wb.writeb(s)
+	} else {
+		z.wi.writeb(s)
+	}
+}
+func (z *encWriterSwitch) writestr(s string) {
+	if z.bytes {
+		z.wb.writestr(s)
+	} else {
+		z.wi.writestr(s)
+	}
+}
+func (z *encWriterSwitch) writen1(b1 byte) {
+	if z.bytes {
+		z.wb.writen1(b1)
+	} else {
+		z.wi.writen1(b1)
+	}
+}
+func (z *encWriterSwitch) writen2(b1, b2 byte) {
+	if z.bytes {
+		z.wb.writen2(b1, b2)
+	} else {
+		z.wi.writen2(b1, b2)
+	}
+}
+func (z *encWriterSwitch) end() {
+	if z.bytes {
+		z.wb.end()
+	} else {
+		z.wi.end()
+	}
+}
+
+*/
 
 // Encoder writes an object to an output stream in a supported format.
 //
@@ -837,26 +1230,23 @@ type Encoder struct {
 
 	// NOTE: Encoder shouldn't call it's write methods,
 	// as the handler MAY need to do some coordination.
-	// w *encWriterSwitch
+	w *encWriterSwitch
 
 	// bw *bufio.Writer
 	as encDriverAsis
 
-	jenc *jsonEncDriver
-	h    *BasicHandle
-	hh   Handle
-
-	// ---- cpu cache line boundary
-	encWriterSwitch
-
 	err error
 
-	// ---- cpu cache line boundary
-	// ---- writable fields during execution --- *try* to keep in sep cache line
-	ci set // holds set of addresses found during an encoding (if CheckCircularRef=true)
-	// cidef [1]interface{} // default ci
+	h  *BasicHandle
+	hh Handle
+	// ---- cpu cache line boundary? + 3
+	encWriterSwitch
 
-	b [(5 * 8)]byte // for encoding chan byte, (non-addressable) [N]byte, etc
+	ci set
+
+	b [(5 * 8)]byte // for encoding chan or (non-addressable) [N]byte
+
+	// ---- writable fields during execution --- *try* to keep in sep cache line
 
 	// ---- cpu cache line boundary?
 	// b [scratchByteArrayLen]byte
@@ -890,16 +1280,13 @@ func newEncoder(h Handle) *Encoder {
 	e.bytes = true
 	if useFinalizers {
 		runtime.SetFinalizer(e, (*Encoder).finalize)
+		// xdebugf(">>>> new(Encoder) with finalizer")
 	}
-	// e.w = &e.encWriterSwitch
+	e.w = &e.encWriterSwitch
 	e.hh = h
 	e.esep = h.hasElemSeparators()
 
 	return e
-}
-
-func (e *Encoder) w() *encWriterSwitch {
-	return &e.encWriterSwitch
 }
 
 func (e *Encoder) resetCommon() {
@@ -909,21 +1296,9 @@ func (e *Encoder) resetCommon() {
 		e.as, e.isas = e.e.(encDriverAsis)
 		// e.cr, _ = e.e.(containerStateRecv)
 	}
-
-	if e.ci == nil {
-		// e.ci = (set)(e.cidef[:0])
-	} else {
-		e.ci = e.ci[:0]
-	}
-
 	e.be = e.hh.isBinary()
-	e.jenc = nil
 	_, e.js = e.hh.(*JsonHandle)
-	if e.js {
-		e.jenc = e.e.(interface{ getJsonEncDriver() *jsonEncDriver }).getJsonEncDriver()
-	}
 	e.e.reset()
-	e.c = 0
 	e.err = nil
 }
 
@@ -1078,17 +1453,13 @@ func (e *Encoder) Encode(v interface{}) (err error) {
 		defer func() {
 			// if error occurred during encoding, return that error;
 			// else if error occurred on end'ing (i.e. during flush), return that error.
-			err = e.w().endErr()
+			err = e.w.endErr()
 			x := recover()
 			if x == nil {
-				if e.err != err {
-					e.err = err
-				}
+				e.err = err
 			} else {
 				panicValToErr(e, x, &e.err)
-				if e.err != err {
-					err = e.err
-				}
+				err = e.err
 			}
 		}()
 	}
@@ -1111,28 +1482,28 @@ func (e *Encoder) mustEncode(v interface{}) {
 	if e.wf == nil {
 		e.encode(v)
 		e.e.atEndOfEncode()
-		e.w().end()
+		e.w.end()
 		return
 	}
 
 	if e.wf.buf == nil {
 		e.wf.buf = e.wf.bytesBufPooler.get(e.wf.sz)
-		e.wf.buf = e.wf.buf[:cap(e.wf.buf)]
 	}
 	e.wf.calls++
+
 	e.encode(v)
+	e.e.atEndOfEncode()
+	e.w.end()
+
 	e.wf.calls--
-	if e.wf.calls == 0 {
-		e.e.atEndOfEncode()
-		e.w().end()
-		if !e.h.ExplicitRelease {
-			e.wf.release()
-		}
+
+	if !e.h.ExplicitRelease && e.wf.calls == 0 {
+		e.wf.release()
 	}
 }
 
 // func (e *Encoder) deferred(err1 *error) {
-// 	e.w().end()
+// 	e.w.end()
 // 	if recoverPanicToErr {
 // 		if x := recover(); x != nil {
 // 			panicValToErr(e, x, err1)
@@ -1143,6 +1514,7 @@ func (e *Encoder) mustEncode(v interface{}) {
 
 //go:noinline -- as it is run by finalizer
 func (e *Encoder) finalize() {
+	// xdebugf("finalizing Encoder")
 	e.Release()
 }
 
@@ -1160,18 +1532,10 @@ func (e *Encoder) encode(iv interface{}) {
 	// a switch with only concrete types can be optimized.
 	// consequently, we deal with nil and interfaces outside the switch.
 
-	if iv == nil {
+	if iv == nil || definitelyNil(iv) {
 		e.e.EncodeNil()
 		return
 	}
-
-	rv, ok := isNil(iv)
-	if ok {
-		e.e.EncodeNil()
-		return
-	}
-
-	var vself Selfer
 
 	switch v := iv.(type) {
 	// case nil:
@@ -1179,7 +1543,7 @@ func (e *Encoder) encode(iv interface{}) {
 	case Raw:
 		e.rawBytes(v)
 	case reflect.Value:
-		e.encodeValue(v, nil)
+		e.encodeValue(v, nil, true)
 
 	case string:
 		if e.h.StringToRaw {
@@ -1219,8 +1583,10 @@ func (e *Encoder) encode(iv interface{}) {
 		e.e.EncodeTime(v)
 	case []uint8:
 		e.e.EncodeStringBytesRaw(v)
+
 	case *Raw:
 		e.rawBytes(*v)
+
 	case *string:
 		if e.h.StringToRaw {
 			e.e.EncodeStringBytesRaw(bytesView(*v))
@@ -1257,39 +1623,29 @@ func (e *Encoder) encode(iv interface{}) {
 		e.e.EncodeFloat64(*v)
 	case *time.Time:
 		e.e.EncodeTime(*v)
+
 	case *[]uint8:
-		if *v == nil {
-			e.e.EncodeNil()
-		} else {
-			e.e.EncodeStringBytesRaw(*v)
-		}
+		e.e.EncodeStringBytesRaw(*v)
+
 	default:
-		if vself, ok = iv.(Selfer); ok {
-			vself.CodecEncodeSelf(e)
+		if v, ok := iv.(Selfer); ok {
+			v.CodecEncodeSelf(e)
 		} else if !fastpathEncodeTypeSwitch(iv, e) {
-			if !rv.IsValid() {
-				rv = rv4i(iv)
-			}
-			e.encodeValue(rv, nil)
+			// checkfastpath=true (not false), as underlying slice/map type may be fast-path
+			e.encodeValue(reflect.ValueOf(iv), nil, true)
 		}
 	}
 }
 
-func (e *Encoder) encodeValue(rv reflect.Value, fn *codecFn) {
+func (e *Encoder) encodeValue(rv reflect.Value, fn *codecFn, checkFastpath bool) {
 	// if a valid fn is passed, it MUST BE for the dereferenced type of rv
-
-	// We considered using a uintptr (a pointer) retrievable via rv.UnsafeAddr.
-	// However, it is possible for the same pointer to point to 2 different types e.g.
-	//    type T struct { tHelper }
-	//    Here, for var v T; &v and &v.tHelper are the same pointer.
-	// Consequently, we need a tuple of type and pointer, which interface{} natively provides.
-	var sptr interface{} // uintptr
+	var sptr uintptr
 	var rvp reflect.Value
 	var rvpValid bool
 TOP:
 	switch rv.Kind() {
 	case reflect.Ptr:
-		if rvIsNil(rv) {
+		if rv.IsNil() {
 			e.e.EncodeNil()
 			return
 		}
@@ -1297,19 +1653,20 @@ TOP:
 		rvp = rv
 		rv = rv.Elem()
 		if e.h.CheckCircularRef && rv.Kind() == reflect.Struct {
-			sptr = rv2i(rvp) // rv.UnsafeAddr()
+			// TODO: Movable pointers will be an issue here. Future problem.
+			sptr = rv.UnsafeAddr()
 			break TOP
 		}
 		goto TOP
 	case reflect.Interface:
-		if rvIsNil(rv) {
+		if rv.IsNil() {
 			e.e.EncodeNil()
 			return
 		}
 		rv = rv.Elem()
 		goto TOP
 	case reflect.Slice, reflect.Map:
-		if rvIsNil(rv) {
+		if rv.IsNil() {
 			e.e.EncodeNil()
 			return
 		}
@@ -1318,15 +1675,14 @@ TOP:
 		return
 	}
 
-	if sptr != nil && (&e.ci).add(sptr) {
-		// e.errorf("circular reference found: # %d", sptr)
-		e.errorf("circular reference found: # %p, %T", sptr, sptr)
+	if sptr != 0 && (&e.ci).add(sptr) {
+		e.errorf("circular reference found: # %d", sptr)
 	}
 
-	var rt reflect.Type
 	if fn == nil {
-		rt = rv.Type()
-		fn = e.h.fn(rt)
+		rt := rv.Type()
+		// always pass checkCodecSelfer=true, in case T or ****T is passed, where *T is a Selfer
+		fn = e.h.fn(rt, checkFastpath, true)
 	}
 	if fn.i.addrE {
 		if rvpValid {
@@ -1334,11 +1690,8 @@ TOP:
 		} else if rv.CanAddr() {
 			fn.fe(e, &fn.i, rv.Addr())
 		} else {
-			if rt == nil {
-				rt = rv.Type()
-			}
-			rv2 := reflect.New(rt)
-			rvSetDirect(rv2.Elem(), rv)
+			rv2 := reflect.New(rv.Type())
+			rv2.Elem().Set(rv)
 			fn.fe(e, &fn.i, rv2)
 		}
 	} else {
@@ -1399,7 +1752,7 @@ func (e *Encoder) asis(v []byte) {
 	if e.isas {
 		e.as.EncodeAsis(v)
 	} else {
-		e.w().writeb(v)
+		e.w.writeb(v)
 	}
 }
 
@@ -1415,78 +1768,6 @@ func (e *Encoder) wrapErr(v interface{}, err *error) {
 	*err = encodeError{codecError{name: e.hh.Name(), err: v}}
 }
 
-// ---- container tracker methods
-// Note: We update the .c after calling the callback.
-// This way, the callback can know what the last status was.
-
-func (e *Encoder) mapStart(length int) {
-	e.e.WriteMapStart(length)
-	e.c = containerMapStart
-}
-
-func (e *Encoder) mapElemKey() {
-	if e.js {
-		e.jenc.WriteMapElemKey()
-	}
-	e.c = containerMapKey
-}
-
-func (e *Encoder) mapElemValue() {
-	if e.js {
-		e.jenc.WriteMapElemValue()
-	}
-	e.c = containerMapValue
-}
-
-// // Note: This is harder to inline, as there are 2 function calls inside.
-// func (e *Encoder) mapElemKeyOrValue(j uint8) {
-// 	if j == 0 {
-// 		if e.js {
-// 			e.jenc.WriteMapElemKey()
-// 		}
-// 		e.c = containerMapKey
-// 	} else {
-// 		if e.js {
-// 			e.jenc.WriteMapElemValue()
-// 		}
-// 		e.c = containerMapValue
-// 	}
-// }
-
-func (e *Encoder) mapEnd() {
-	e.e.WriteMapEnd()
-	e.c = containerMapEnd
-	e.c = 0
-}
-
-func (e *Encoder) arrayStart(length int) {
-	e.e.WriteArrayStart(length)
-	e.c = containerArrayStart
-}
-
-func (e *Encoder) arrayElem() {
-	if e.js {
-		e.jenc.WriteArrayElem()
-	}
-	e.c = containerArrayElem
-}
-
-func (e *Encoder) arrayEnd() {
-	e.e.WriteArrayEnd()
-	e.c = 0
-	e.c = containerArrayEnd
-}
-
-// ----------
-
-func (e *Encoder) sideEncode(v interface{}, bs *[]byte) {
-	rv := baseRV(v)
-	e2 := NewEncoderBytes(bs, e.hh)
-	e2.encodeValue(rv, e.h.fnNoExt(rv.Type()))
-	e2.e.atEndOfEncode()
-	e2.w().end()
-}
-
 func encStructFieldKey(encName string, ee encDriver, w *encWriterSwitch,
 	keyType valueType, encNameAsciiAlphaNum bool, js bool) {
 	var m must
@@ -1494,20 +1775,18 @@ func encStructFieldKey(encName string, ee encDriver, w *encWriterSwitch,
 	// since keyType is typically valueTypeString, branch prediction is pretty good.
 	if keyType == valueTypeString {
 		if js && encNameAsciiAlphaNum { // keyType == valueTypeString
-			w.writeqstr(encName)
-			// ----
 			// w.writen1('"')
 			// w.writestr(encName)
 			// w.writen1('"')
 			// ----
 			// w.writestr(`"` + encName + `"`)
 			// ----
-			// // do concat myself, so it is faster than the generic string concat
-			// b := make([]byte, len(encName)+2)
-			// copy(b[1:], encName)
-			// b[0] = '"'
-			// b[len(b)-1] = '"'
-			// w.writeb(b)
+			// do concat myself, so it is faster than the generic string concat
+			b := make([]byte, len(encName)+2)
+			copy(b[1:], encName)
+			b[0] = '"'
+			b[len(b)-1] = '"'
+			w.writeb(b)
 		} else { // keyType == valueTypeString
 			ee.EncodeStringEnc(cUTF8, encName)
 		}
@@ -1519,35 +1798,6 @@ func encStructFieldKey(encName string, ee encDriver, w *encWriterSwitch,
 		ee.EncodeFloat64(m.Float(strconv.ParseFloat(encName, 64)))
 	}
 }
-
-// type encExtPreambler interface {
-// 	encodeExtPreamble(tag uint8, length int)
-// }
-
-// func encBytesExt(rv interface{}, xtag uint64, ext Ext, h Handle, e encDriver) {
-// 	var bs []byte
-// 	var bufp bytesBufPooler
-// 	if ext == SelfExt {
-// 		bs = bufp.get(1024)[:0]
-// 		rv2 := rv4i(v)
-// 		NewEncoderBytes(&bs, h).encodeValue(rv2, h.fnNoExt(rv2.Type()))
-// 	} else {
-// 		bs = ext.WriteExt(v)
-// 	}
-// 	if bs == nil {
-// 		e.EncodeNil()
-// 		return
-// 	}
-// 	if e.h.WriteExt {
-// 		e.encodeExtPreamble(uint8(xtag), len(bs))
-// 		e.w.writeb(bs)
-// 	} else {
-// 		e.EncodeStringBytesRaw(bs)
-// 	}
-// 	if ext == SelfExt {
-// 		bufp.end()
-// 	}
-// }
 
 // func encStringAsRawBytesMaybe(ee encDriver, s string, stringToRaw bool) {
 // 	if stringToRaw {

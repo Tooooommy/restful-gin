@@ -1,94 +1,102 @@
 package config
 
 import (
-	"CrownDaisy_GOGIN/lib"
-	"github.com/go-ini/ini"
-	"os"
-	"path/filepath"
+	"github.com/spf13/viper"
 )
 
-var DefaultConfigPath = "app.dev.ini"
-
 type Mysql struct {
-	Host              string `ini:"host"`
-	Username          string `ini:"username"`
-	Password          string `ini:"password"`
-	Schema            string `ini:"schema"`
-	Charset           string `ini:"charset"`
-	Loc               string `ini:"loc"`
-	MaxIdleConns      int    `ini:"max_idle_conns"`
-	MaxOpenConns      int    `ini:"max_open_conns"`
-	MaxConnLifetime   int    `ini:"max_conn_lifetime"`
-	ConnectionTimeout int    `ini:"connection_timeout"`
+	Host              string `json:"host"`
+	Username          string `json:"username"`
+	Password          string `json:"password"`
+	Schema            string `json:"schema"`
+	Charset           string `json:"charset"`
+	Loc               string `json:"loc"`
+	MaxIdleConns      int    `json:"max_idle_conns"`
+	MaxOpenConns      int    `json:"max_open_conns"`
+	MaxConnLifetime   int    `json:"max_conn_lifetime"`
+	ConnectionTimeout int    `json:"connection_timeout"`
 }
 
 type Redis struct {
-	Host        string `ini:"host"`
-	Password    string `ini:"password"`
-	Db          int    `ini:"db"`
-	MaxIdle     int    `ini:"max_idle"`
-	MaxActive   int    `ini:"max_active"`
-	IdleTimeout int    `ini:"idle_timeout"`
-	Wait        bool   `ini:"wait"`
+	Host        string `json:"host"`
+	Password    string `json:"password"`
+	Db          int    `json:"db"`
+	MaxIdle     int    `json:"max_idle"`
+	MaxActive   int    `json:"max_active"`
+	IdleTimeout int    `json:"idle_timeout"`
+	Wait        bool   `json:"wait"`
 }
 
 type Logger struct {
-	Output    string `ini:"output"`
-	Formatter string `ini:"formatter"`
-	Level     string `ini:"level"`
+	Output    string `json:"output"`
+	Formatter string `json:"formatter"`
+	Level     string `json:"level"`
 }
 
 type Jwt struct {
-	Issuer  string `ini:"issuer"`
-	Secret  string `ini:"secret"`
-	Expired int    `ini:"expired"`
+	Issuer  string `json:"issuer"`
+	Secret  string `json:"secret"`
+	Expired int    `json:"expired"`
 }
 
 type Pool struct {
-	Ants   int `ini:"ants"`
-	Worker int `ini:"worker"`
-	Job    int `ini:"job"`
+	Ants   int `json:"ants"`
+	Worker int `json:"worker"`
+	Job    int `json:"job"`
 }
 
 type Spider struct {
-	StartUrl []string `ini:"url"`
+	StartUrl []string `json:"url"`
 }
 
 type WeChat struct {
-	AppId       string `ini:"app_id"`
-	AppSecret   string `ini:"app_secret"`
-	RedirectUri string `ini:"redirect_uri"`
-	Scope       string `ini:"scope"`
-	State       string `ini:"state"`
-	Lang        string `ini:"lang"`
+	AppId       string `json:"app_id"`
+	AppSecret   string `json:"app_secret"`
+	RedirectUri string `json:"redirect_uri"`
+	Scope       string `json:"scope"`
+	State       string `json:"state"`
+	Lang        string `json:"lang"`
 }
 
 type QQ struct {
-	ClientId     string `ini:"client_id"`
-	ClientSecret string `ini:"client_secret"`
-	RedirectUri  string `ini:"redirect_uri"`
-	Scope        string `ini:"scope"`
-	Display      string `ini:"display"`
-	State        string `ini:"state"`
+	ClientId     string `json:"client_id"`
+	ClientSecret string `json:"client_secret"`
+	RedirectUri  string `json:"redirect_uri"`
+	Scope        string `json:"scope"`
+	Display      string `json:"display"`
+	State        string `json:"state"`
 }
-
+type App struct {
+	Mode   string `json:"mode"`
+	Port   string `json:"port"`
+	Secret string `json:"secret"`
+}
 type Config struct {
-	AppMode   string `ini:"app_mode"`
-	AppPort   string `ini:"app_port"`
-	PwdSecret string `ini:"pwd_secret"`
-	Mysql     `ini:"mysql"`
-	Redis     `ini:"redis"`
-	Logger    `ini:"logger"`
-	Jwt       `ini:"jwt"`
-	Pool      `ini:"pool"`
-	WeChat    `ini:"we_chat"`
-	QQ        `ini:"qq"`
+	App    `json:"app"`
+	Mysql  `json:"mysql"`
+	Redis  `json:"redis"`
+	Logger `json:"logger"`
+	Jwt    `json:"jwt"`
+	Pool   `json:"pool"`
+	WeChat `json:"we_chat"`
+	QQ     `json:"qq"`
 }
 
-var cfg *Config
+var (
+	cfg               *Config
+	defaultConfigName = "config.toml"
+	defaultConfigPath = "./"
+	defaultConfigType = "toml"
+)
 
-func init() {
-	Init()
+func SetConfigName(name string) {
+	defaultConfigName = name
+}
+func SetConfigPath(path string) {
+	defaultConfigPath = path
+}
+func SetConfigType(t string) {
+	defaultConfigType = t
 }
 
 func Get() *Config {
@@ -97,38 +105,15 @@ func Get() *Config {
 	}
 	return cfg
 }
-
-func SetMode(mode string) {
-	if mode == "pro" {
-		DefaultConfigPath = "app.pro.ini"
-	} else {
-		DefaultConfigPath = "app.dev.ini"
-	}
-	// 重新设置Init
-	Init()
-}
-
 func Init() {
 	cfg = new(Config)
-	path := DefaultConfigPath
-
-	// main.go run
-	if !utils.IsFileExist(DefaultConfigPath) {
-		path = filepath.Join("config", DefaultConfigPath)
+	viper.SetConfigType(defaultConfigType)
+	viper.SetConfigFile(defaultConfigName)
+	viper.AddConfigPath(defaultConfigPath)
+	if err := viper.ReadInConfig(); err != nil {
+		panic(err)
 	}
-
-	// test.go
-	if !utils.IsFileExist(path) {
-		if os.Chdir("../") == nil {
-			path = filepath.Join("config", DefaultConfigPath)
-		}
-		if !utils.IsFileExist(path) {
-			if os.Chdir("../") == nil {
-				path = filepath.Join("config", DefaultConfigPath)
-			}
-		}
-	}
-	if err := ini.MapTo(&cfg, path); err != nil {
+	if err := viper.Unmarshal(&cfg); err != nil {
 		panic(err)
 	}
 }

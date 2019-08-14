@@ -7,10 +7,6 @@ import (
 	"github.com/jinzhu/gorm"
 )
 
-const (
-	initSchemaMigrationID = "SCHEMA_INIT"
-)
-
 // MigrateFunc is the func signature for migrating.
 type MigrateFunc func(*gorm.DB) error
 
@@ -52,15 +48,6 @@ type Gormigrate struct {
 	initSchema InitSchemaFunc
 }
 
-// ReservedIDError is returned when a migration is using a reserved ID
-type ReservedIDError struct {
-	ID string
-}
-
-func (e *ReservedIDError) Error() string {
-	return fmt.Sprintf(`gormigrate: Reserved migration ID: "%s"`, e.ID)
-}
-
 // DuplicatedIDError is returned when more than one migration have the same ID
 type DuplicatedIDError struct {
 	ID string
@@ -89,13 +76,9 @@ var (
 	// ErrMissingID is returned when the ID od migration is equal to ""
 	ErrMissingID = errors.New("gormigrate: Missing ID in migration")
 
-	// ErrNoRunMigration is returned when any run migration was found while
+	// ErrNoRunnedMigration is returned when any runned migration was found while
 	// running RollbackLast
-	ErrNoRunMigration = errors.New("gormigrate: Could not find last run migration")
-
-	// ErrMigrationIDDoesNotExist is returned when migrating or rolling back to a migration ID that
-	// does not exist in the list of migrations
-	ErrMigrationIDDoesNotExist = errors.New("gormigrate: Tried to migrate to an ID that doesn't exist")
+	ErrNoRunnedMigration = errors.New("gormigrate: Could not find last runned migration")
 )
 
 // New returns a new Gormigrate.
@@ -126,83 +109,48 @@ func (g *Gormigrate) InitSchema(initSchema InitSchemaFunc) {
 
 // Migrate executes all migrations that did not run yet.
 func (g *Gormigrate) Migrate() error {
-	if !g.hasMigrations() {
-		return ErrNoMigrationDefined
-	}
-	var targetMigrationID string
-	if len(g.migrations) > 0 {
-		targetMigrationID = g.migrations[len(g.migrations)-1].ID
-	}
-	return g.migrate(targetMigrationID)
+	return g.migrate("")
 }
 
 // MigrateTo executes all migrations that did not run yet up to the migration that matches `migrationID`.
 func (g *Gormigrate) MigrateTo(migrationID string) error {
-	if err := g.checkIDExist(migrationID); err != nil {
-		return err
-	}
 	return g.migrate(migrationID)
 }
 
 func (g *Gormigrate) migrate(migrationID string) error {
-	if !g.hasMigrations() {
+	if len(g.migrations) == 0 {
 		return ErrNoMigrationDefined
-	}
-
-	if err := g.checkReservedID(); err != nil {
-		return err
 	}
 
 	if err := g.checkDuplicatedID(); err != nil {
 		return err
 	}
 
-	g.begin()
-	defer g.rollback()
-
 	if err := g.createMigrationTableIfNotExists(); err != nil {
 		return err
 	}
 
-	if g.initSchema != nil {
-		canInitializeSchema, err := g.canInitializeSchema()
-		if err != nil {
+	g.begin()
+
+	if g.initSchema != nil && g.isFirstRun() {
+		if err := g.runInitSchema(); err != nil {
+			g.rollback()
 			return err
 		}
-		if canInitializeSchema {
-			if err := g.runInitSchema(); err != nil {
-				return err
-			}
-			return g.commit()
-		}
+		return g.commit()
 	}
 
 	for _, migration := range g.migrations {
 		if err := g.runMigration(migration); err != nil {
+			g.rollback()
 			return err
 		}
 		if migrationID != "" && migration.ID == migrationID {
 			break
 		}
 	}
+
 	return g.commit()
-}
-
-// There are migrations to apply if either there's a defined
-// initSchema function or if the list of migrations is not empty.
-func (g *Gormigrate) hasMigrations() bool {
-	return g.initSchema != nil || len(g.migrations) > 0
-}
-
-// Check whether any migration is using a reserved ID.
-// For now there's only have one reserved ID, but there may be more in the future.
-func (g *Gormigrate) checkReservedID() error {
-	for _, m := range g.migrations {
-		if m.ID == initSchemaMigrationID {
-			return &ReservedIDError{ID: m.ID}
-		}
-	}
-	return nil
 }
 
 func (g *Gormigrate) checkDuplicatedID() error {
@@ -216,33 +164,21 @@ func (g *Gormigrate) checkDuplicatedID() error {
 	return nil
 }
 
-func (g *Gormigrate) checkIDExist(migrationID string) error {
-	for _, migrate := range g.migrations {
-		if migrate.ID == migrationID {
-			return nil
-		}
-	}
-	return ErrMigrationIDDoesNotExist
-}
-
 // RollbackLast undo the last migration
 func (g *Gormigrate) RollbackLast() error {
 	if len(g.migrations) == 0 {
 		return ErrNoMigrationDefined
 	}
 
-	g.begin()
-	defer g.rollback()
-
-	lastRunMigration, err := g.getLastRunMigration()
+	lastRunnedMigration, err := g.getLastRunnedMigration()
 	if err != nil {
 		return err
 	}
 
-	if err := g.rollbackMigration(lastRunMigration); err != nil {
+	if err := g.RollbackMigration(lastRunnedMigration); err != nil {
 		return err
 	}
-	return g.commit()
+	return nil
 }
 
 // RollbackTo undoes migrations up to the given migration that matches the `migrationID`.
@@ -252,53 +188,39 @@ func (g *Gormigrate) RollbackTo(migrationID string) error {
 		return ErrNoMigrationDefined
 	}
 
-	if err := g.checkIDExist(migrationID); err != nil {
-		return err
-	}
-
 	g.begin()
-	defer g.rollback()
 
 	for i := len(g.migrations) - 1; i >= 0; i-- {
 		migration := g.migrations[i]
 		if migration.ID == migrationID {
 			break
 		}
-		migrationRan, err := g.migrationRan(migration)
-		if err != nil {
-			return err
-		}
-		if migrationRan {
+		if g.migrationDidRun(migration) {
 			if err := g.rollbackMigration(migration); err != nil {
+				g.rollback()
 				return err
 			}
 		}
 	}
+
 	return g.commit()
 }
 
-func (g *Gormigrate) getLastRunMigration() (*Migration, error) {
+func (g *Gormigrate) getLastRunnedMigration() (*Migration, error) {
 	for i := len(g.migrations) - 1; i >= 0; i-- {
 		migration := g.migrations[i]
-
-		migrationRan, err := g.migrationRan(migration)
-		if err != nil {
-			return nil, err
-		}
-
-		if migrationRan {
+		if g.migrationDidRun(migration) {
 			return migration, nil
 		}
 	}
-	return nil, ErrNoRunMigration
+	return nil, ErrNoRunnedMigration
 }
 
 // RollbackMigration undo a migration.
 func (g *Gormigrate) RollbackMigration(m *Migration) error {
 	g.begin()
-	defer g.rollback()
-
 	if err := g.rollbackMigration(m); err != nil {
+		g.rollback()
 		return err
 	}
 	return g.commit()
@@ -314,14 +236,14 @@ func (g *Gormigrate) rollbackMigration(m *Migration) error {
 	}
 
 	sql := fmt.Sprintf("DELETE FROM %s WHERE %s = ?", g.options.TableName, g.options.IDColumnName)
-	return g.tx.Exec(sql, m.ID).Error
+	if err := g.db.Exec(sql, m.ID).Error; err != nil {
+		return err
+	}
+	return nil
 }
 
 func (g *Gormigrate) runInitSchema() error {
 	if err := g.initSchema(g.tx); err != nil {
-		return err
-	}
-	if err := g.insertMigration(initSchemaMigrationID); err != nil {
 		return err
 	}
 
@@ -339,11 +261,7 @@ func (g *Gormigrate) runMigration(migration *Migration) error {
 		return ErrMissingID
 	}
 
-	migrationRan, err := g.migrationRan(migration)
-	if err != nil {
-		return err
-	}
-	if !migrationRan {
+	if !g.migrationDidRun(migration) {
 		if err := migration.Migrate(g.tx); err != nil {
 			return err
 		}
@@ -356,42 +274,32 @@ func (g *Gormigrate) runMigration(migration *Migration) error {
 }
 
 func (g *Gormigrate) createMigrationTableIfNotExists() error {
-	if g.tx.HasTable(g.options.TableName) {
+	if g.db.HasTable(g.options.TableName) {
 		return nil
 	}
 
 	sql := fmt.Sprintf("CREATE TABLE %s (%s VARCHAR(%d) PRIMARY KEY)", g.options.TableName, g.options.IDColumnName, g.options.IDColumnSize)
-	return g.tx.Exec(sql).Error
+	if err := g.db.Exec(sql).Error; err != nil {
+		return err
+	}
+	return nil
 }
 
-func (g *Gormigrate) migrationRan(m *Migration) (bool, error) {
+func (g *Gormigrate) migrationDidRun(m *Migration) bool {
 	var count int
-	err := g.tx.
+	g.db.
 		Table(g.options.TableName).
 		Where(fmt.Sprintf("%s = ?", g.options.IDColumnName), m.ID).
-		Count(&count).
-		Error
-	return count > 0, err
+		Count(&count)
+	return count > 0
 }
 
-// The schema can be initialised only if it hasn't been initialised yet
-// and no other migration has been applied already.
-func (g *Gormigrate) canInitializeSchema() (bool, error) {
-	migrationRan, err := g.migrationRan(&Migration{ID: initSchemaMigrationID})
-	if err != nil {
-		return false, err
-	}
-	if migrationRan {
-		return false, nil
-	}
-
-	// If the ID doesn't exist, we also want the list of migrations to be empty
+func (g *Gormigrate) isFirstRun() bool {
 	var count int
-	err = g.tx.
+	g.db.
 		Table(g.options.TableName).
-		Count(&count).
-		Error
-	return count == 0, err
+		Count(&count)
+	return count == 0
 }
 
 func (g *Gormigrate) insertMigration(id string) error {
@@ -409,7 +317,9 @@ func (g *Gormigrate) begin() {
 
 func (g *Gormigrate) commit() error {
 	if g.options.UseTransaction {
-		return g.tx.Commit().Error
+		if err := g.tx.Commit().Error; err != nil {
+			return err
+		}
 	}
 	return nil
 }

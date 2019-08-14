@@ -1,4 +1,4 @@
-# https://taskfile.org
+# https://github.com/go-task/task
 
 version: '2'
 
@@ -6,7 +6,7 @@ tasks:
   dl-deps:
     desc: Downloads cli dependencies
     cmds:
-      - go get -u golang.org/x/lint/golint
+      - go get -u github.com/golang/lint/golint
 
   go-get-all:
     cmds:
@@ -44,17 +44,3 @@ tasks:
   test:
     cmds:
       - go test -v -tags {{.DATABASE}}
-
-  docker:
-    cmds:
-      - task: docker:build
-      - task: docker:test
-
-  docker:build:
-    cmds:
-      - docker build -t gormigrate .
-
-  docker:test:
-    cmds:
-      - docker-compose down -v
-      - docker-compose run gormigrate go test -v -tags 'postgresql sqlite mysql sqlserver'

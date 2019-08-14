@@ -1,0 +1,4 @@
+2019-08-15 00:27:16.565	INFO	test/test.go:6	hello
+2019-08-15 00:27:37.764	INFO	test/test.go:6	i am a good man
+2019-08-15 00:28:21.358	INFO	ws/server.go:18	i am a good man
+2019-08-15 00:28:43.980	INFO	ws/server.go:18	hi, man
