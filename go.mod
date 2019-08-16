@@ -25,18 +25,15 @@ require (
 	github.com/joho/godotenv v1.3.0 // indirect
 	github.com/kennygrant/sanitize v1.2.4 // indirect
 	github.com/levigross/grequests v0.0.0-20190130132859-37c80f76a0da
-	github.com/muesli/regommend v0.0.0-20181114200216-ecc9bd5eb221
 	github.com/natefinch/lumberjack v2.0.0+incompatible
 	github.com/panjf2000/ants v4.0.2+incompatible
 	github.com/saintfish/chardet v0.0.0-20120816061221-3af4cd4741ca // indirect
 	github.com/satori/go.uuid v1.2.0
-	github.com/sirupsen/logrus v1.4.2
 	github.com/spf13/viper v1.4.0
-	github.com/stretchr/testify v1.3.0
 	github.com/temoto/robotstxt v1.1.1 // indirect
 	github.com/tidwall/gjson v1.3.2
 	go.uber.org/zap v1.10.0
 	golang.org/x/net v0.0.0-20190813141303-74dc4d7220e7
-	gopkg.in/natefinch/lumberjack.v2 v2.0.0
+	gopkg.in/natefinch/lumberjack.v2 v2.0.0 // indirect
 	gopkg.in/stretchr/testify.v1 v1.2.2 // indirect
 )

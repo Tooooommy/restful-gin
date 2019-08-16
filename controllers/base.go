@@ -1,45 +1,61 @@
 package base_controller
 
 import (
-	"CrownDaisy_GOGIN/helper"
+	"CrownDaisy_GOGIN/helpers"
 	"CrownDaisy_GOGIN/logger"
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"net/http"
 	"runtime/debug"
+	"time"
 )
 
-type BaseController struct {
+type BaseCtl struct {
 }
 
-func (b *BaseController) NotFound(c *gin.Context) {
-	c.JSON(http.StatusNotFound, helper.ReturnResult(helper.CodeNotFoundPage, "page not found", nil))
+func (b *BaseCtl) NotFound(c *gin.Context) {
+	c.JSON(http.StatusNotFound, helpers.ReturnResult(helpers.CodeNotFoundPage, "page not found", nil))
 	return
 }
 
-func (b *BaseController) HandleResultPanic(c *gin.Context) {
+func (b *BaseCtl) HandleResultPanic(c *gin.Context) {
 	defer func() {
 		if r := recover(); r != nil {
-			logger.Debugf("panic occurred: %+v", r)
-			logger.Debugln(debug.Stack())
-			if _, ok := r.(*helper.Result); ok {
+			logger.Sugar.Infof("panic occurred: %+v", r)
+			logger.Sugar.Debug(debug.Stack())
+			if _, ok := r.(*helpers.Result); ok {
 				c.JSON(http.StatusOK, r)
+				return
 			}
 		}
 	}()
 	c.Next()
 }
 
-func (b *BaseController) Assert(bo bool, res *helper.Result) {
-	if !bo {
-		panic(res)
-	}
+func (b *BaseCtl) MidCors() gin.HandlerFunc {
+	return cors.New(cors.Config{
+		AllowAllOrigins:        true,
+		AllowFiles:             false,
+		AllowBrowserExtensions: false,
+		AllowMethods: []string{http.MethodGet, http.MethodPost,
+			http.MethodPut, http.MethodDelete, http.MethodOptions,
+			http.MethodHead, http.MethodTrace, http.MethodPatch},
+		MaxAge: 50 * time.Second,
+	})
 }
 
-func (b *BaseController) CheckErr(err error, res *helper.Result) {
-	if err != nil {
-		b.Assert(false, res)
-	}
+func (b *BaseCtl) Assert(bo bool, res *helpers.Result) {
+	helpers.Assert(bo, res)
 }
 
-func (b *BaseController) GetCurrentUser()   {}
-func (b *BaseController) GetCurrentUserId() {}
+func (b *BaseCtl) CheckErr(err error, res *helpers.Result) {
+	helpers.CheckErr(err, res)
+}
+
+func (b *BaseCtl) GetAccountId(c *gin.Context) string {
+	return c.GetString("account_id")
+}
+
+func (b *BaseCtl) GetSessionId(c *gin.Context) string {
+	return c.GetString("session_id")
+}

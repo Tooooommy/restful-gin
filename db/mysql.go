@@ -12,7 +12,7 @@ import (
 var GDB *gorm.DB
 
 func InitMysqlDB() (err error) {
-	// 名字
+	// 数据库表默认名字
 	gorm.DefaultTableNameHandler = func(db *gorm.DB, defaultTableName string) string {
 		var tableName = defaultTableName
 		if strings.HasSuffix(defaultTableName, "_models") {
@@ -21,6 +21,7 @@ func InitMysqlDB() (err error) {
 		}
 		return tableName
 	}
+
 	cfg := config.Get().Mysql
 	if cfg.Charset == "" {
 		cfg.Charset = "utf8mb4"

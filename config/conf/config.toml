@@ -1,0 +1,44 @@
+[app]
+mode = "dev"
+port = ":5000"
+secret = "爱你遗忘你"
+
+[mysql]
+host = "127.0.0.1:3306"
+username = "root"
+password = "hyh610136724"
+schema = "database_development"
+charset = "utf8mb4"
+loc = "Local"
+connection_timeout = 10
+max_idle_conns = 30
+max_open_conns = 10
+max_conn_lifetime = 0
+
+[redis]
+host = "127.0.0.1:6379"
+password = "hyh610136724"
+db = 0
+max_idle = 10
+max_active = 30
+idle_timeout = 240
+wait = true
+
+[logger]
+output = "log/log.log"
+level = "debug"
+formatter = "json"
+
+[we_chat]
+app_id = "wechat"
+app_secret = "wechat"
+redirect_uri = "http://localhost:8080"
+scope = "snsapi_login"
+lang = "zh_CN"
+
+[qq]
+client_id = "qq"
+client_secret = "qq"
+redirect_uri = "redirect_uri"
+scope ="scope"
+display ="qq"

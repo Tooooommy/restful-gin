@@ -2,6 +2,8 @@ package config
 
 import (
 	"github.com/spf13/viper"
+	"path"
+	"runtime"
 )
 
 type Mysql struct {
@@ -28,15 +30,20 @@ type Redis struct {
 }
 
 type Logger struct {
-	Output    string `json:"output"`
-	Formatter string `json:"formatter"`
-	Level     string `json:"level"`
+	Output     string `json:"output" default:"a"`
+	MaxSize    int    `json:"max_size"`
+	MaxBackups int    `json:"max_backups"`
+	MaxAge     int    `json:"max_age"`
+	Level      string `json:"level"`
 }
 
 type Jwt struct {
-	Issuer  string `json:"issuer"`
-	Secret  string `json:"secret"`
-	Expired int    `json:"expired"`
+	Subject   string `json:"subject"`
+	Audience  string `json:"audience"`
+	NotBefore int64  `json:"not_before"`
+	Issuer    string `json:"issuer"`
+	Secret    string `json:"secret"`
+	Expired   int    `json:"expired"`
 }
 
 type Pool struct {
@@ -84,19 +91,13 @@ type Config struct {
 
 var (
 	cfg               *Config
-	defaultConfigName = "config.toml"
-	defaultConfigPath = "./"
+	defaultConfigFile = "./config.toml"
 	defaultConfigType = "toml"
+	defaultConfigName = ""
 )
 
-func SetConfigName(name string) {
-	defaultConfigName = name
-}
-func SetConfigPath(path string) {
-	defaultConfigPath = path
-}
-func SetConfigType(t string) {
-	defaultConfigType = t
+func SetConfigFile(path string) {
+	defaultConfigFile = path
 }
 
 func Get() *Config {
@@ -105,13 +106,19 @@ func Get() *Config {
 	}
 	return cfg
 }
+
 func Init() {
 	cfg = new(Config)
 	viper.SetConfigType(defaultConfigType)
-	viper.SetConfigFile(defaultConfigName)
-	viper.AddConfigPath(defaultConfigPath)
+	viper.SetConfigFile(defaultConfigFile)
 	if err := viper.ReadInConfig(); err != nil {
-		panic(err)
+		_, file, _, _ := runtime.Caller(1)
+		defaultConfigFile = path.Dir(file) + "/conf/config.toml"
+		viper.SetConfigFile(defaultConfigFile)
+		viper.SetConfigType(path.Ext(defaultConfigFile)[1:])
+		if err := viper.ReadInConfig(); err != nil {
+			panic(err)
+		}
 	}
 	if err := viper.Unmarshal(&cfg); err != nil {
 		panic(err)
