@@ -1,4 +1,4 @@
-package helpers
+package schedule
 
 import "github.com/asaskevich/govalidator"
 

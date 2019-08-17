@@ -1,4 +1,4 @@
-package helpers
+package ants
 
 import (
 	"CrownDaisy_GOGIN/config"
