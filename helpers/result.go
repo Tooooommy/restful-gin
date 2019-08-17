@@ -1,4 +1,4 @@
-package helper
+package helpers
 
 type Result struct {
 	Code int         `json:"code"`
@@ -8,4 +8,16 @@ type Result struct {
 
 func ReturnResult(code int, msg string, data interface{}) *Result {
 	return &Result{code, msg, data}
+}
+
+func Assert(bo bool, res *Result) {
+	if !bo {
+		panic(res)
+	}
+}
+
+func CheckErr(err error, res *Result) {
+	if err != nil {
+		Assert(false, res)
+	}
 }

@@ -7,11 +7,12 @@ import (
 
 type AccountModel struct {
 	*gorm.Model
+	UniqueId  string          // 唯一ID
 	Avatar    string          // 用户头像
 	Name      string          // 用户名
 	Email     string          // 邮箱
 	Password  string          // 密码
-	SessionID string          // token session id
+	SessionId string          // token session id
 	Status    bool            // 用户状态
 	BookLists []BookListModel `gorm:"ForeignKey:OwnerID"`   // 用户拥有的书单 1 to many
 	Rates     []RateModel     `gorm:"ForeignKey:AccountID"` // 评价的书籍 1 to many

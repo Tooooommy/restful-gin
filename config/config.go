@@ -2,6 +2,8 @@ package config
 
 import (
 	"github.com/spf13/viper"
+	"path"
+	"runtime"
 )
 
 type Mysql struct {
@@ -84,16 +86,12 @@ type Config struct {
 
 var (
 	cfg               *Config
-	defaultConfigName = "config.toml"
-	defaultConfigPath = "./"
+	defaultConfigFile = "config.toml"
 	defaultConfigType = "toml"
 )
 
-func SetConfigName(name string) {
-	defaultConfigName = name
-}
-func SetConfigPath(path string) {
-	defaultConfigPath = path
+func SetConfigFile(path string) {
+	defaultConfigFile = path
 }
 func SetConfigType(t string) {
 	defaultConfigType = t
@@ -101,19 +99,24 @@ func SetConfigType(t string) {
 
 func Get() *Config {
 	if cfg == nil {
-		Init()
+		InitConfig()
 	}
 	return cfg
 }
-func Init() {
+func InitConfig() error {
 	cfg = new(Config)
 	viper.SetConfigType(defaultConfigType)
-	viper.SetConfigFile(defaultConfigName)
-	viper.AddConfigPath(defaultConfigPath)
+	viper.SetConfigFile(defaultConfigFile)
 	if err := viper.ReadInConfig(); err != nil {
-		panic(err)
+		_, file, _, _ := runtime.Caller(1)
+		defaultConfigFile = path.Dir(file) + "/conf/config." + defaultConfigType
+		viper.SetConfigFile(defaultConfigFile)
+		if err := viper.ReadInConfig(); err != nil {
+			return err
+		}
 	}
 	if err := viper.Unmarshal(&cfg); err != nil {
-		panic(err)
+		return err
 	}
+	return nil
 }

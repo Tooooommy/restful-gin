@@ -8,7 +8,7 @@ import (
 
 func RedirectWeChatLoginPage() string {
 	cfg := config.Get().WeChat
-	cfg.State = helper.UUID()
+	cfg.State = helpers.UUID()
 	auth := wechat.New(cfg.AppId, cfg.RedirectUri, cfg.State, cfg.Scope)
 	return auth.AuthCodeUrl()
 }

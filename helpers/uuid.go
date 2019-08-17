@@ -1,4 +1,4 @@
-package helper
+package helpers
 
 import (
 	"CrownDaisy_GOGIN/config"
@@ -7,12 +7,8 @@ import (
 	"io"
 )
 
-func UniqueID() string {
-	return UUID()
-}
-
 func UUID() string {
-	return uuid.Must(uuid.NewV4()).String()
+	return uuid.NewV4().String()
 }
 
 func Md5(part string) string {

@@ -6,70 +6,71 @@ import (
 	"CrownDaisy_GOGIN/controllers/account_controller"
 	"CrownDaisy_GOGIN/db"
 	"CrownDaisy_GOGIN/logger"
-	"CrownDaisy_GOGIN/middleware"
-	"fmt"
 	"github.com/gin-gonic/gin"
 	"net/http"
 )
 
-var (
-	base *base_controller.BaseController
-)
-
 func init() {
-
+	var err error
 	// init mysql
-	err := db.InitMysqlDB()
-	if err != nil {
-		fmt.Printf("init mysql error: %v", err)
+	if err = db.InitMysqlDB(); err != nil {
+		logger.Sugar.Panicf("init mysql error: %v", err)
+		panic(err)
 	}
 
 	// init redis
-	err = db.InitRedisDB()
-	if err != nil {
-		fmt.Printf("init redis error: %v", err)
+	if err = db.InitRedisDB(); err != nil {
+		logger.Sugar.Panicf("init redis error: %v", err)
+		panic(err)
 	}
 
-	// init jwt auth
-	err = account_controller.InitMidAuth()
-	if err != nil {
-		fmt.Printf("init jwt auth error: %+v", err)
+	// init config
+	if err = config.InitConfig(); err != nil {
+		logger.Sugar.Panicf("init config error: %v", err)
+		panic(err)
 	}
+	// init jwt auth
+	if auth, err = base_controller.InitAuth(); err != nil {
+		logger.Sugar.Panicf("init auth error: %v", err)
+		panic(err)
+	}
+
 }
 
 var (
-	auth account_controller.AuthController
+	base    *base_controller.BaseCtl
+	auth    *base_controller.AuthCtl
+	account *account_controller.AccountCtl
 )
 
 func addRoutes(router *gin.Engine) {
-	jwtMid := account_controller.JwtMid
-	router.Use(middleware.MidCors())
+	router.Use(base.MidCors())
 	router.NoRoute(base.NotFound)
-	//router.Use(account_controller.JwtMid.MiddlewareFunc())
 
-	apiRouter := router.Group("/api", base.HandleResultPanic)
+	apiRouter := router.Group("/api", base.MidRecovery)
 	// no jwt auth
 	{
 		// login and refresh_token
-		apiRouter.POST("/account/login", jwtMid.LoginHandler)
-		apiRouter.GET("/account/refresh", jwtMid.RefreshHandler)
+		apiRouter.POST("/account/login", auth.LoginHandler)
+		apiRouter.GET("/account/refresh", auth.RefreshHandler)
 		// auth wechat and qq
-		apiRouter.GET("/account/auth/wechat", auth.RedirectWeChatLoginPage)
-		apiRouter.GET("/account/auth/qqconnect", auth.RedirectQQLoginPage)
+		apiRouter.GET("/account/auth/wechat", account.RedirectWeChatLoginPage)
+		apiRouter.GET("/account/auth/qqconnect", account.RedirectQQLoginPage)
 		//auth redirect
-		apiRouter.GET("/account/auth/wechat/callback", auth.AuthWeChatCallback)
-		apiRouter.GET("/account/auth/qq/callback", auth.AuthQQCallback)
+		apiRouter.GET("/account/auth/wechat/callback", account.AuthWeChatCallback)
+		apiRouter.GET("/account/auth/qq/callback", account.AuthQQCallback)
 
 		// recommend book
 	}
 	// jwt auth
-	authRouter := apiRouter.Group("/auth", jwtMid.MiddlewareFunc())
+	authRouter := apiRouter.Group("/auth", auth.MiddlewareFunc())
 	{
 		authRouter.POST("/logout")
 	}
 
 	if err := http.ListenAndServe(config.Get().App.Port, router); err != nil {
-		logger.Debugf("http router listen error: %+v", err)
+		logger.Sugar.Debugf("http router listen error: %+v", err)
+		panic(err)
 	}
 	return
 }

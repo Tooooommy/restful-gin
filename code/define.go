@@ -1,4 +1,4 @@
-package helper
+package code
 
 const CodeFailed = 0
 const CodeSuccess = 1

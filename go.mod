@@ -28,6 +28,7 @@ require (
 	github.com/muesli/regommend v0.0.0-20181114200216-ecc9bd5eb221
 	github.com/natefinch/lumberjack v2.0.0+incompatible
 	github.com/panjf2000/ants v4.0.2+incompatible
+	github.com/roylee0704/gron v0.0.0-20160621042432-e78485adab46 // indirect
 	github.com/saintfish/chardet v0.0.0-20120816061221-3af4cd4741ca // indirect
 	github.com/satori/go.uuid v1.2.0
 	github.com/sirupsen/logrus v1.4.2

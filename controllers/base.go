@@ -3,25 +3,27 @@ package base_controller
 import (
 	"CrownDaisy_GOGIN/helper"
 	"CrownDaisy_GOGIN/logger"
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"net/http"
 	"runtime/debug"
+	"time"
 )
 
-type BaseController struct {
+type BaseCtl struct {
 }
 
-func (b *BaseController) NotFound(c *gin.Context) {
-	c.JSON(http.StatusNotFound, helper.ReturnResult(helper.CodeNotFoundPage, "page not found", nil))
+func (b *BaseCtl) NotFound(c *gin.Context) {
+	c.JSON(http.StatusNotFound, helpers.ReturnResult(helpers.CodeNotFoundPage, "page not found", nil))
 	return
 }
 
-func (b *BaseController) HandleResultPanic(c *gin.Context) {
+func (b *BaseCtl) MidRecovery(c *gin.Context) {
 	defer func() {
 		if r := recover(); r != nil {
-			logger.Debugf("panic occurred: %+v", r)
-			logger.Debugln(debug.Stack())
-			if _, ok := r.(*helper.Result); ok {
+			logger.Sugar.Debugf("panic occurred: %+v", r)
+			logger.Sugar.Debug(debug.Stack())
+			if _, ok := r.(*helpers.Result); ok {
 				c.JSON(http.StatusOK, r)
 			}
 		}
@@ -29,17 +31,14 @@ func (b *BaseController) HandleResultPanic(c *gin.Context) {
 	c.Next()
 }
 
-func (b *BaseController) Assert(bo bool, res *helper.Result) {
-	if !bo {
-		panic(res)
-	}
+func (b *BaseCtl) MidCors() gin.HandlerFunc {
+	return cors.New(cors.Config{
+		AllowAllOrigins:        true,
+		AllowFiles:             false,
+		AllowBrowserExtensions: false,
+		AllowMethods: []string{http.MethodGet, http.MethodPost,
+			http.MethodPut, http.MethodDelete, http.MethodOptions,
+			http.MethodHead, http.MethodTrace, http.MethodPatch},
+		MaxAge: 50 * time.Second,
+	})
 }
-
-func (b *BaseController) CheckErr(err error, res *helper.Result) {
-	if err != nil {
-		b.Assert(false, res)
-	}
-}
-
-func (b *BaseController) GetCurrentUser()   {}
-func (b *BaseController) GetCurrentUserId() {}

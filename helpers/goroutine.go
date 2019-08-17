@@ -1,4 +1,4 @@
-package helper
+package helpers
 
 import (
 	"CrownDaisy_GOGIN/config"

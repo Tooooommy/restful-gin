@@ -1,126 +1,122 @@
 package account_controller
 
 import (
-	"CrownDaisy_GOGIN/db/model"
+	"CrownDaisy_GOGIN/config"
 	"CrownDaisy_GOGIN/helper"
-	"github.com/appleboy/gin-jwt"
+	"CrownDaisy_GOGIN/lib/qq"
+	"CrownDaisy_GOGIN/lib/wechat"
+	"fmt"
 	"github.com/gin-gonic/gin"
-	"strings"
-	"time"
+	"net/http"
 )
 
-type AccountParams struct {
-	UserName  string `json:"user_name"`
-	Password  string `json:"password"`
-	SessionID string `json:"-"`
+type AccountCtl struct {
 }
 
-type AccountResult struct {
-	AccessToken string
-	Expire      time.Time
-}
-
-var JwtMid *jwt.GinJWTMiddleware
-
-func InitMidAuth() (err error) {
-	JwtMid, err = jwt.New(&jwt.GinJWTMiddleware{
-		Realm:            "zero zone",
-		SigningAlgorithm: "HS512",
-		Key:              []byte("十步杀一人，千里不留行"),
-		Timeout:          24 * time.Hour,
-		MaxRefresh:       1 * time.Hour,
-		Authenticator:    Authenticator,
-		Authorizator:     Authorizator,
-		PayloadFunc:      PayloadFunc,
-		Unauthorized:     Unauthorized,
-		LoginResponse:    LoginResponse,
-		RefreshResponse:  RefreshResponse,
-		IdentityHandler:  IdentityHandler,
-		IdentityKey:      "id",
-		TokenLookup:      "header: Authorization, query: token, cookie: jwt",
-		TokenHeadName:    "Bearer",
-		TimeFunc:         time.Now,
-	})
+// redirect to wechat
+func (*AccountCtl) RedirectWeChatLoginPage(c *gin.Context) {
+	cfg := config.Get().WeChat
+	cfg.State = helpers.UUID()
+	auth := wechat.New(cfg.AppId, cfg.RedirectUri, cfg.State, cfg.Scope)
+	auth.RedirectWithGin(c)
 	return
 }
 
-// login flow
-// authenticator
-// Payload func
-// login response
-
-func Authenticator(c *gin.Context) (interface{}, error) {
-	var accountParams AccountParams
-	// get account json from web
-	// get verify account from database
-	// gen uuid session id into redis
-	err := c.BindJSON(&accountParams)
-	helper.CheckErr(err, helper.ReturnResult(helper.CodeMissBindValues, "miss bind values", nil))
-
-	// username : name or email
-	var password = helper.GenPwd(accountParams.Password)
-	var account = &model.AccountModel{}
-	var exist = false
-	if strings.Contains(accountParams.UserName, "@") {
-		account.Email = accountParams.UserName
-	} else {
-		account.Name = accountParams.UserName
+func (*AccountCtl) AuthWeChatCallback(c *gin.Context) {
+	// wechat auth redirect uri
+	cfg := config.Get().WeChat
+	redirectUri := c.Query("redirect_uri")
+	if cfg.RedirectUri != redirectUri {
+		result := helpers.ReturnResult(helpers.CodeAuthRedirectUriInvalid, "auth redirect uri invalid", nil)
+		c.JSON(http.StatusOK, result)
+		return
 	}
-	account.Password = password
-	account, exist = account.GetAccount()
-	helper.Assert(exist, helper.ReturnResult(helper.CodeNotExistAccount, "account not exist", nil))
-	// 保存sessionID
-	sessionID := helper.UUID()
-	account.SessionID = sessionID
-	accountParams.SessionID = sessionID
-	accountParams.UserName = account.Name
-	return accountParams, nil
-}
-
-func PayloadFunc(data interface{}) jwt.MapClaims {
-	if account, ok := data.(AccountParams); ok {
-		return jwt.MapClaims{
-			"account": account.UserName,
-			"session": account.SessionID,
-		}
+	// 验证state 判断是不是此次的授权
+	state := c.Query("state")
+	if state == "" {
+		result := helpers.ReturnResult(helpers.CodeAuthStateInvalid, "auth state invalid", nil)
+		c.JSON(http.StatusOK, result)
+		return
 	}
-	return jwt.MapClaims{}
-}
-
-func LoginResponse(c *gin.Context, code int, token string, expire time.Time) {
-	c.JSON(code, helper.ReturnResult(helper.CodeSuccess, "success", &AccountResult{
-		token, expire,
-	}))
-}
-
-//jwt flow
-//IdentityHandler
-//Authorizator
-//Unauthorized
-
-func IdentityHandler(c *gin.Context) interface{} {
-	// 验证 session 是否一样
-	claims := jwt.ExtractClaims(c)
-	return &AccountParams{
-		UserName:  claims["account"].(string),
-		SessionID: claims["session"].(string),
+	code := c.Query("code")
+	if code == "" {
+		result := helpers.ReturnResult(helpers.CodeAuthCodeEmpty, "auth code is empty", nil)
+		c.JSON(http.StatusOK, result)
+		return
 	}
-}
 
-func Authorizator(data interface{}, c *gin.Context) bool {
-	if accountParams, ok := data.(AccountParams); ok {
-		// 判断session是否一致
-		account := model.AccountModel{Name: accountParams.UserName, SessionID: accountParams.SessionID}
-		_, exist := account.GetAccount()
-		return exist
+	client := wechat.DefaultClient(cfg.AppId, cfg.AppSecret, code)
+	token, err := client.GetAccessToken(code)
+	if err != nil {
+		result := helpers.ReturnResult(helpers.CodeAuthAccessTokenError, "auth access token failed", nil)
+		c.JSON(http.StatusOK, result)
+		return
 	}
-	return false
+	// 保存token
+	fmt.Printf("%+v", token)
+	// 获取user info
+	userInfo, err := client.GetUserInfo(token.AccessToken, token.Openid, cfg.Lang)
+	if err != nil {
+		result := helpers.ReturnResult(helpers.CodeAuthUserInfoError, "auth user info failed", nil)
+		c.JSON(http.StatusOK, result)
+		return
+	}
+	// 保存user info
+	fmt.Printf("%+v", userInfo)
+	return
 }
 
-func Unauthorized(c *gin.Context, code int, msg string) {
-	c.JSON(code, helper.ReturnResult(helper.CodeAuthAccountInvalid, msg, nil))
+// redirect to wechat
+func (*AccountCtl) RedirectQQLoginPage(c *gin.Context) {
+	cfg := config.Get().QQ
+	cfg.State = helpers.UUID()
+	auth := qq.New(cfg.ClientId, cfg.ClientSecret, cfg.RedirectUri, cfg.State, cfg.Scope)
+	auth.RedirectWithGin(c)
+	return
 }
 
-func RefreshResponse(c *gin.Context, code int, token string, expire time.Time) {
-	c.JSON(code, helper.ReturnResult(helper.CodeSuccess, "success", &AccountResult{token, expire}))
+func (*AccountCtl) AuthQQCallback(c *gin.Context) {
+	// wechat auth redirect uri
+	cfg := config.Get().QQ
+	// 验证state 判断是不是此次的授权
+	state := c.Query("state")
+	if state == "" {
+		result := helpers.ReturnResult(helpers.CodeAuthStateInvalid, "auth state invalid", nil)
+		c.JSON(http.StatusOK, result)
+		return
+	}
+	code := c.Query("code")
+	if code == "" {
+		result := helpers.ReturnResult(helpers.CodeAuthCodeEmpty, "auth code is empty", nil)
+		c.JSON(http.StatusOK, result)
+		return
+	}
+
+	auth := qq.New(cfg.ClientId, cfg.ClientSecret, cfg.RedirectUri, cfg.State, cfg.Display)
+	client := qq.DefaultClient(auth)
+	token, err := client.GetAccessToken(code)
+	if err != nil {
+		result := helpers.ReturnResult(helpers.CodeAuthAccessTokenError, "auth access token failed", nil)
+		c.JSON(http.StatusOK, result)
+		return
+	}
+	// 保存token
+	fmt.Printf("%+v", token)
+	// get openid
+	openMe, err := client.GetOpenId(token.AccessToken)
+	if err != nil {
+		result := helpers.ReturnResult(helpers.CodeAuthUserInfoError, "auth openid gain failed", nil)
+		c.JSON(http.StatusOK, result)
+		return
+	}
+	// 获取user info
+	userInfo, err := client.GetUserInfo(token.AccessToken, openMe.Openid)
+	if err != nil {
+		result := helpers.ReturnResult(helpers.CodeAuthUserInfoError, "auth user info failed", nil)
+		c.JSON(http.StatusOK, result)
+		return
+	}
+	// 保存user info
+	fmt.Printf("%+v", userInfo)
+	return
 }
