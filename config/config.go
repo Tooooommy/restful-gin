@@ -30,15 +30,20 @@ type Redis struct {
 }
 
 type Logger struct {
-	Output    string `json:"output"`
-	Formatter string `json:"formatter"`
-	Level     string `json:"level"`
+	Output     string `json:"output" default:"a"`
+	MaxSize    int    `json:"max_size"`
+	MaxBackups int    `json:"max_backups"`
+	MaxAge     int    `json:"max_age"`
+	Level      string `json:"level"`
 }
 
 type Jwt struct {
-	Issuer  string `json:"issuer"`
-	Secret  string `json:"secret"`
-	Expired int    `json:"expired"`
+	Subject   string `json:"subject"`
+	Audience  string `json:"audience"`
+	NotBefore int64  `json:"not_before"`
+	Issuer    string `json:"issuer"`
+	Secret    string `json:"secret"`
+	Expired   int    `json:"expired"`
 }
 
 type Pool struct {
@@ -99,7 +104,7 @@ func SetConfigType(t string) {
 
 func Get() *Config {
 	if cfg == nil {
-		InitConfig()
+		_ = InitConfig()
 	}
 	return cfg
 }

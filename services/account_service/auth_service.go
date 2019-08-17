@@ -2,7 +2,7 @@ package account_service
 
 import (
 	"CrownDaisy_GOGIN/config"
-	"CrownDaisy_GOGIN/helper"
+	"CrownDaisy_GOGIN/helpers"
 	"CrownDaisy_GOGIN/lib/wechat"
 )
 

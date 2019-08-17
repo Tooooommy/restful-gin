@@ -7,7 +7,7 @@ import (
 
 type AccountModel struct {
 	*gorm.Model
-	UniqueId  string          // 唯一ID
+	UniqueId  string          //唯一id
 	Avatar    string          // 用户头像
 	Name      string          // 用户名
 	Email     string          // 邮箱

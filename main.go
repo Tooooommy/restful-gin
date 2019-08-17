@@ -13,14 +13,16 @@ import (
 func init() {
 	var err error
 	// init mysql
-	if err = db.InitMysqlDB(); err != nil {
-		logger.Sugar.Panicf("init mysql error: %v", err)
+
+	err = db.InitMysqlDB()
+	if err != nil {
+		logger.Sugar.Errorf("init mysql error: %v", err)
 		panic(err)
 	}
 
-	// init redis
-	if err = db.InitRedisDB(); err != nil {
-		logger.Sugar.Panicf("init redis error: %v", err)
+	err = db.InitRedisDB()
+	if err != nil {
+		logger.Sugar.Errorf("init redis error: %v", err)
 		panic(err)
 	}
 
@@ -30,8 +32,9 @@ func init() {
 		panic(err)
 	}
 	// init jwt auth
-	if auth, err = base_controller.InitAuth(); err != nil {
-		logger.Sugar.Panicf("init auth error: %v", err)
+	auth, err = base_controller.InitAuth()
+	if err != nil {
+		logger.Sugar.Errorf("init auth error: %v", err)
 		panic(err)
 	}
 

@@ -2,7 +2,9 @@ package account_controller
 
 import (
 	"CrownDaisy_GOGIN/config"
-	"CrownDaisy_GOGIN/helper"
+	"CrownDaisy_GOGIN/controllers"
+	"CrownDaisy_GOGIN/define"
+	"CrownDaisy_GOGIN/helpers"
 	"CrownDaisy_GOGIN/lib/qq"
 	"CrownDaisy_GOGIN/lib/wechat"
 	"fmt"
@@ -11,6 +13,7 @@ import (
 )
 
 type AccountCtl struct {
+	base_controller.BaseCtl
 }
 
 // redirect to wechat
@@ -27,20 +30,20 @@ func (*AccountCtl) AuthWeChatCallback(c *gin.Context) {
 	cfg := config.Get().WeChat
 	redirectUri := c.Query("redirect_uri")
 	if cfg.RedirectUri != redirectUri {
-		result := helpers.ReturnResult(helpers.CodeAuthRedirectUriInvalid, "auth redirect uri invalid", nil)
+		result := helpers.ReturnResult(define.AuthRedirectUriInvalid, "auth redirect uri invalid", nil)
 		c.JSON(http.StatusOK, result)
 		return
 	}
 	// 验证state 判断是不是此次的授权
 	state := c.Query("state")
 	if state == "" {
-		result := helpers.ReturnResult(helpers.CodeAuthStateInvalid, "auth state invalid", nil)
+		result := helpers.ReturnResult(define.AuthStateInvalid, "auth state invalid", nil)
 		c.JSON(http.StatusOK, result)
 		return
 	}
 	code := c.Query("code")
 	if code == "" {
-		result := helpers.ReturnResult(helpers.CodeAuthCodeEmpty, "auth code is empty", nil)
+		result := helpers.ReturnResult(define.AuthCodeEmpty, "auth code is empty", nil)
 		c.JSON(http.StatusOK, result)
 		return
 	}
@@ -48,7 +51,7 @@ func (*AccountCtl) AuthWeChatCallback(c *gin.Context) {
 	client := wechat.DefaultClient(cfg.AppId, cfg.AppSecret, code)
 	token, err := client.GetAccessToken(code)
 	if err != nil {
-		result := helpers.ReturnResult(helpers.CodeAuthAccessTokenError, "auth access token failed", nil)
+		result := helpers.ReturnResult(define.AuthAccessTokenError, "auth access token failed", nil)
 		c.JSON(http.StatusOK, result)
 		return
 	}
@@ -57,7 +60,7 @@ func (*AccountCtl) AuthWeChatCallback(c *gin.Context) {
 	// 获取user info
 	userInfo, err := client.GetUserInfo(token.AccessToken, token.Openid, cfg.Lang)
 	if err != nil {
-		result := helpers.ReturnResult(helpers.CodeAuthUserInfoError, "auth user info failed", nil)
+		result := helpers.ReturnResult(define.AuthUserInfoError, "auth user info failed", nil)
 		c.JSON(http.StatusOK, result)
 		return
 	}
@@ -81,13 +84,13 @@ func (*AccountCtl) AuthQQCallback(c *gin.Context) {
 	// 验证state 判断是不是此次的授权
 	state := c.Query("state")
 	if state == "" {
-		result := helpers.ReturnResult(helpers.CodeAuthStateInvalid, "auth state invalid", nil)
+		result := helpers.ReturnResult(define.AuthStateInvalid, "auth state invalid", nil)
 		c.JSON(http.StatusOK, result)
 		return
 	}
 	code := c.Query("code")
 	if code == "" {
-		result := helpers.ReturnResult(helpers.CodeAuthCodeEmpty, "auth code is empty", nil)
+		result := helpers.ReturnResult(define.AuthCodeEmpty, "auth code is empty", nil)
 		c.JSON(http.StatusOK, result)
 		return
 	}
@@ -96,7 +99,7 @@ func (*AccountCtl) AuthQQCallback(c *gin.Context) {
 	client := qq.DefaultClient(auth)
 	token, err := client.GetAccessToken(code)
 	if err != nil {
-		result := helpers.ReturnResult(helpers.CodeAuthAccessTokenError, "auth access token failed", nil)
+		result := helpers.ReturnResult(define.AuthAccessTokenError, "auth access token failed", nil)
 		c.JSON(http.StatusOK, result)
 		return
 	}
@@ -105,14 +108,14 @@ func (*AccountCtl) AuthQQCallback(c *gin.Context) {
 	// get openid
 	openMe, err := client.GetOpenId(token.AccessToken)
 	if err != nil {
-		result := helpers.ReturnResult(helpers.CodeAuthUserInfoError, "auth openid gain failed", nil)
+		result := helpers.ReturnResult(define.AuthUserInfoError, "auth openid gain failed", nil)
 		c.JSON(http.StatusOK, result)
 		return
 	}
 	// 获取user info
 	userInfo, err := client.GetUserInfo(token.AccessToken, openMe.Openid)
 	if err != nil {
-		result := helpers.ReturnResult(helpers.CodeAuthUserInfoError, "auth user info failed", nil)
+		result := helpers.ReturnResult(define.AuthUserInfoError, "auth user info failed", nil)
 		c.JSON(http.StatusOK, result)
 		return
 	}

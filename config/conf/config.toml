@@ -25,7 +25,7 @@ idle_timeout = 240
 wait = true
 
 [logger]
-output = "stdout"
+output = "log/log.log"
 level = "debug"
 formatter = "json"
 
