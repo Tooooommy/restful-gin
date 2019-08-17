@@ -18,6 +18,7 @@
         <method importPath="github.com/panjf2000/ants" receiver="*Pool" name="Release" />
         <method importPath="github.com/gomodule/redigo/redis" receiver="*Pool" name="Close" />
         <method importPath="os" receiver="*File" name="Close" />
+        <method importPath="github.com/panjf2000/ants" receiver="*PoolWithFunc" name="Release" />
       </methods>
     </inspection_tool>
   </profile>

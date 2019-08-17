@@ -42,3 +42,6 @@ client_secret = "qq"
 redirect_uri = "redirect_uri"
 scope ="scope"
 display ="qq"
+
+[pool]
+ants=100

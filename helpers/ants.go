@@ -11,4 +11,5 @@ func InitAnts() {
 	_ = p.Submit(func() {
 		println("HELLO")
 	})
+	p.Running()
 }
