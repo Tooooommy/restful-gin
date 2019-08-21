@@ -9,7 +9,6 @@ import (
 )
 
 func TestConnRedis(t *testing.T) {
-	config.DefaultConfigPath = DefaultPath
 	cfg := config.Get().Redis
 	pool := &redis.Pool{
 		MaxIdle:   cfg.MaxIdle,
@@ -55,7 +54,6 @@ func TestConnRedis(t *testing.T) {
 }
 
 func TestInitPool(t *testing.T) {
-	config.DefaultConfigPath = DefaultPath
 	err := InitRedisDB()
 	if err != nil {
 		t.Errorf("init redis db pool error:%v", err)

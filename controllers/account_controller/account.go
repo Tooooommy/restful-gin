@@ -3,8 +3,8 @@ package account_controller
 import (
 	"CrownDaisy_GOGIN/config"
 	"CrownDaisy_GOGIN/controllers"
-	"CrownDaisy_GOGIN/define"
 	"CrownDaisy_GOGIN/helpers"
+	"CrownDaisy_GOGIN/helpers/define"
 	"CrownDaisy_GOGIN/lib/qq"
 	"CrownDaisy_GOGIN/lib/wechat"
 	"fmt"

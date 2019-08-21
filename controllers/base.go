@@ -1,8 +1,8 @@
 package base_controller
 
 import (
-	"CrownDaisy_GOGIN/define"
 	"CrownDaisy_GOGIN/helpers"
+	"CrownDaisy_GOGIN/helpers/define"
 	"CrownDaisy_GOGIN/logger"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"

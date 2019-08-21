@@ -2,8 +2,8 @@ package base_controller
 
 import (
 	"CrownDaisy_GOGIN/db/model"
-	"CrownDaisy_GOGIN/define"
 	"CrownDaisy_GOGIN/helpers"
+	"CrownDaisy_GOGIN/helpers/define"
 	"github.com/appleboy/gin-jwt"
 	"github.com/gin-gonic/gin"
 	"strings"

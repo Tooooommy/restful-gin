@@ -45,10 +45,7 @@ func Migration%s() *gormigrate.Migration {
 }`
 
 func GetMigrations() MigrationList {
-	var migrations = MigrationList{
-		Migrationtest(),
-		Migrationtest1(),
-	}
+	var migrations = MigrationList{}
 	sort.Sort(migrations)
 	return migrations
 }

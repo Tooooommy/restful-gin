@@ -8,10 +8,7 @@ import (
 	"testing"
 )
 
-var DefaultPath = "/home/tommy/go/src/CrownDaisy_GOGIN/app.ini"
-
 func TestConnect(t *testing.T) {
-	config.DefaultConfigPath = DefaultPath
 	cfg := config.Get().Mysql
 	fmt.Println(cfg)
 	source := fmt.Sprintf("%s:%s@tcp(%s)/%s?charset=%s&loc=%s&parseTime=true&timeout=%ds",
@@ -33,7 +30,6 @@ type TestAccount struct {
 }
 
 func TestGDB(t *testing.T) {
-	config.DefaultConfigPath = DefaultPath
 	err := InitMysqlDB()
 	if err != nil {
 		t.Errorf("test init mysql error: %v", err)

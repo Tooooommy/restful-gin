@@ -25,10 +25,7 @@ var mt = flag.String("mt", "", "migrate to migration")
 var r = flag.Bool("r", false, "rollback last migration")
 var rt = flag.String("rt", "", "rollback to migration")
 
-var DefaultPath = "/home/tommy/go/src/CrownDaisy_GOGIN/app.ini"
-
 func InitMigrate(msg migrations.MigrationList) (*gormigrate.Gormigrate, error) {
-	config.DefaultConfigPath = DefaultPath
 	cfg := config.Get().Mysql
 	source := fmt.Sprintf("%s:%s@tcp(%s)/%s?charset=%s&loc=%s&parseTime=true&timeout=%ds",
 		cfg.Username, cfg.Password, cfg.Host, cfg.Schema, cfg.Charset, cfg.Loc, cfg.ConnectionTimeout)

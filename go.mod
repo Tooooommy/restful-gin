@@ -9,6 +9,7 @@ require (
 	github.com/antchfx/xpath v1.0.0 // indirect
 	github.com/appleboy/gin-jwt v2.6.0+incompatible
 	github.com/asaskevich/govalidator v0.0.0-20190528192650-f61b66f89f4a
+	github.com/bamzi/jobrunner v0.0.0-20190810144113-852b7ca4d475 // indirect
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/gin-contrib/cors v1.3.0
 	github.com/gin-gonic/gin v1.4.0
@@ -24,17 +25,22 @@ require (
 	github.com/jinzhu/now v1.0.1
 	github.com/joho/godotenv v1.3.0 // indirect
 	github.com/kennygrant/sanitize v1.2.4 // indirect
+	github.com/kylelemons/go-gypsy v0.0.0-20160905020020-08cad365cd28 // indirect
 	github.com/levigross/grequests v0.0.0-20190130132859-37c80f76a0da
 	github.com/natefinch/lumberjack v2.0.0+incompatible
 	github.com/panjf2000/ants v4.0.2+incompatible
 	github.com/roylee0704/gron v0.0.0-20160621042432-e78485adab46 // indirect
+	github.com/rubenv/sql-migrate v0.0.0-20190717103323-87ce952f7079 // indirect
 	github.com/saintfish/chardet v0.0.0-20120816061221-3af4cd4741ca // indirect
 	github.com/satori/go.uuid v1.2.0
 	github.com/spf13/viper v1.4.0
+	github.com/steinbacher/goose v0.0.0-20160725131629-dc457c319503 // indirect
 	github.com/temoto/robotstxt v1.1.1 // indirect
 	github.com/tidwall/gjson v1.3.2
+	github.com/ziutek/mymysql v1.5.4 // indirect
 	go.uber.org/zap v1.10.0
 	golang.org/x/net v0.0.0-20190813141303-74dc4d7220e7
+	gopkg.in/gorp.v1 v1.7.2 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0 // indirect
 	gopkg.in/stretchr/testify.v1 v1.2.2 // indirect
 )
