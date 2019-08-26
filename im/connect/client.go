@@ -9,9 +9,11 @@ import (
 var (
 	CodeSyncTrigger    = 1 // 消息同步
 	CodeMessageSend    = 2 // 消息发送
-	CodeMessageSendAck = 3 // 消息发送回执
+	CodeMessageSendACK = 3 // 消息发送回执
 	CodeMessage        = 4 // 消息投递
-	CodeMessageAck     = 5 // 消息投递回执
+	CodeMessageACK     = 5 // 消息投递回执
+	CodeHeartbeat      = 6 // 心跳
+	CodeHeartbeatACK   = 7 // 心跳回执
 )
 
 type Client struct {
@@ -68,21 +70,42 @@ func (c *Client) Handle(msg *Message) {
 		c.HandleMessageSend(msg)
 	case CodeSyncTrigger:
 		c.HandleSyncTrigger(msg)
-	case CodeMessageSendAck:
-		c.HandleMessageSendAck(msg)
-
+	case CodeMessageSendACK:
+		c.HandleMessageSendACK(msg)
+	case CodeHeartbeat:
+		c.HandleHeartbeat()
 	}
 }
 
 func (c *Client) HandleMessageSend(msg *Message) {
 
 }
-func (c *Client) HandleMessageSendAck(msg *Message) {
+func (c *Client) HandleMessageSendACK(msg *Message) {
 
 }
 func (c *Client) HandleSyncTrigger(msg *Message) {
 
 }
+func (c *Client) HandleHeartbeat() {
+}
 
 func (c *Client) Release() {
+}
+
+func (c *Client) SetPongHandler(pong func(appData string) error) {
+	c.Conn.SetPongHandler(pong)
+}
+
+func (c *Client) SetPingHandler(ping func(appData string) error) {
+	c.Conn.SetPingHandler(ping)
+}
+
+func (c *Client) SetClose(close func(code int, text string) error) {
+	c.Conn.SetCloseHandler(close)
+}
+
+func (c *Client) SetHandleConnect(func()) {
+}
+
+func (c *Client) SetHandleDisconnect() {
 }

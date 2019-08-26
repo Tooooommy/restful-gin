@@ -2,12 +2,13 @@ package main
 
 import (
 	"CrownDaisy_GOGIN/config"
-	"CrownDaisy_GOGIN/controllers"
+	base_controller "CrownDaisy_GOGIN/controllers"
 	"CrownDaisy_GOGIN/controllers/account_controller"
 	"CrownDaisy_GOGIN/db"
 	"CrownDaisy_GOGIN/logger"
-	"github.com/gin-gonic/gin"
 	"net/http"
+
+	"github.com/gin-gonic/gin"
 )
 
 func init() {
@@ -62,7 +63,6 @@ func addRoutes(router *gin.Engine) {
 		//auth redirect
 		apiRouter.GET("/account/auth/wechat/callback", account.AuthWeChatCallback)
 		apiRouter.GET("/account/auth/qq/callback", account.AuthQQCallback)
-
 		// recommend book
 	}
 	// jwt auth

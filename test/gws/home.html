@@ -33,6 +33,7 @@
                     appendLog(item);
                 };
                 conn.onmessage = function (evt) {
+                    console.log(evt.data)
                     var messages = evt.data.split('\n');
                     for (var i = 0; i < messages.length; i++) {
                         var item = document.createElement("div");
@@ -40,6 +41,9 @@
                         appendLog(item);
                     }
                 };
+                conn.onclose = function (evt) {
+                    console.log(evt.code)
+                }
             } else {
                 var item = document.createElement("div");
                 item.innerHTML = "<b>Your browser does not support WebSockets.</b>";

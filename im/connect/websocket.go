@@ -7,10 +7,10 @@ import (
 	"net/http"
 )
 
-type HandleFunc func(c *Client)
 type WebsocketHandler struct {
-	Config   *config.WebSocketConfig
-	Upgrader *websocket.Upgrader
+	Config      *config.WebSocketConfig
+	Upgrader    *websocket.Upgrader
+	pongHandler func(appData string) error
 }
 
 func New(c *config.WebSocketConfig) *WebsocketHandler {

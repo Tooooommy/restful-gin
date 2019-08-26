@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"flag"
 	"fmt"
 	"github.com/gorilla/websocket"
@@ -83,7 +84,7 @@ func (h *Hub) run() {
 
 const (
 	writeWait      = 10 * time.Second
-	pongWait       = 60 * time.Second
+	pongWait       = 6 * time.Second
 	pingPeriod     = (pongWait * 9) / 10
 	maxMessageSize = 512
 )
@@ -112,7 +113,16 @@ func (c *Client) readPump() {
 	_ = c.conn.SetReadDeadline(time.Now().Add(pongWait))
 	c.conn.SetPongHandler(func(appData string) error {
 		err := c.conn.SetReadDeadline(time.Now().Add(pongWait))
+		fmt.Println("pong", appData)
 		return err
+	})
+	c.conn.SetPingHandler(func(appData string) error {
+		fmt.Println("ping", appData)
+		return errors.New("ping")
+	})
+	c.conn.SetCloseHandler(func(code int, text string) error {
+		fmt.Println(code, text)
+		return nil
 	})
 	for {
 		_, message, err := c.conn.ReadMessage()
@@ -167,6 +177,8 @@ func (c *Client) writePump() {
 }
 
 func serveWs(hub *Hub, w http.ResponseWriter, r *http.Request) {
+	fmt.Println(w.Header())
+	fmt.Println(r.Header)
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Println(err)

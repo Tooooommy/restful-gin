@@ -2,14 +2,15 @@ package account_controller
 
 import (
 	"CrownDaisy_GOGIN/config"
-	"CrownDaisy_GOGIN/controllers"
+	base_controller "CrownDaisy_GOGIN/controllers"
 	"CrownDaisy_GOGIN/helpers"
 	"CrownDaisy_GOGIN/helpers/define"
-	"CrownDaisy_GOGIN/lib/qq"
-	"CrownDaisy_GOGIN/lib/wechat"
+	"CrownDaisy_GOGIN/libs/qq"
+	"CrownDaisy_GOGIN/libs/wechat"
 	"fmt"
-	"github.com/gin-gonic/gin"
 	"net/http"
+
+	"github.com/gin-gonic/gin"
 )
 
 type AccountCtl struct {
@@ -17,7 +18,7 @@ type AccountCtl struct {
 }
 
 // redirect to wechat
-func (*AccountCtl) RedirectWeChatLoginPage(c *gin.Context) {
+func (t *AccountCtl) RedirectWeChatLoginPage(c *gin.Context) {
 	cfg := config.Get().WeChat
 	cfg.State = helpers.UUID()
 	auth := wechat.New(cfg.AppId, cfg.RedirectUri, cfg.State, cfg.Scope)
@@ -25,7 +26,7 @@ func (*AccountCtl) RedirectWeChatLoginPage(c *gin.Context) {
 	return
 }
 
-func (*AccountCtl) AuthWeChatCallback(c *gin.Context) {
+func (t *AccountCtl) AuthWeChatCallback(c *gin.Context) {
 	// wechat auth redirect uri
 	cfg := config.Get().WeChat
 	redirectUri := c.Query("redirect_uri")
@@ -70,7 +71,7 @@ func (*AccountCtl) AuthWeChatCallback(c *gin.Context) {
 }
 
 // redirect to wechat
-func (*AccountCtl) RedirectQQLoginPage(c *gin.Context) {
+func (t *AccountCtl) RedirectQQLoginPage(c *gin.Context) {
 	cfg := config.Get().QQ
 	cfg.State = helpers.UUID()
 	auth := qq.New(cfg.ClientId, cfg.ClientSecret, cfg.RedirectUri, cfg.State, cfg.Scope)
@@ -78,7 +79,7 @@ func (*AccountCtl) RedirectQQLoginPage(c *gin.Context) {
 	return
 }
 
-func (*AccountCtl) AuthQQCallback(c *gin.Context) {
+func (t *AccountCtl) AuthQQCallback(c *gin.Context) {
 	// wechat auth redirect uri
 	cfg := config.Get().QQ
 	// 验证state 判断是不是此次的授权
