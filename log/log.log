@@ -1,1 +1,2 @@
 2019-08-17 20:43:52.020	INFO	test/test.go:8	i am a good man
+2019-08-26 23:48:03.047	ERROR	CrownDaisy_GOGIN/main.go:23	init mysql error: dial tcp 127.0.0.1:3306: connect: connection refused

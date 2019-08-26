@@ -1,12 +1,12 @@
 package base_controller
 
 import (
-	"CrownDaisy_GOGIN/helpers"
-	"CrownDaisy_GOGIN/helpers/define"
-	"CrownDaisy_GOGIN/logger"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"net/http"
+	"restful-gin/helpers"
+	"restful-gin/helpers/define"
+	"restful-gin/logger"
 	"runtime/debug"
 	"time"
 )

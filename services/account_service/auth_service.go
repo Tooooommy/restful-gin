@@ -1,9 +1,9 @@
 package account_service
 
 import (
-	"CrownDaisy_GOGIN/config"
-	"CrownDaisy_GOGIN/helpers"
-	"CrownDaisy_GOGIN/lib/wechat"
+	"restful-gin/config"
+	"restful-gin/helpers"
+	"restful-gin/libs/wechat"
 )
 
 func RedirectWeChatLoginPage() string {

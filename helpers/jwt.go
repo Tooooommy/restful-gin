@@ -1,10 +1,10 @@
 package helpers
 
 import (
-	"CrownDaisy_GOGIN/config"
 	"errors"
 	"fmt"
 	"github.com/dgrijalva/jwt-go"
+	"restful-gin/config"
 	"time"
 )
 

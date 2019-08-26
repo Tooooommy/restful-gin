@@ -1,8 +1,8 @@
 package connect
 
 import (
-	"CrownDaisy_GOGIN/logger"
 	"github.com/gorilla/websocket"
+	"restful-gin/logger"
 	"time"
 )
 

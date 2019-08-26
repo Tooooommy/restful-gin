@@ -1,17 +1,15 @@
 package model
 
 import (
-	"CrownDaisy_GOGIN/config"
-	db2 "CrownDaisy_GOGIN/db"
 	"fmt"
+	"restful-gin/db"
 	"testing"
 )
 
 var DefaultPath = "/home/tommy/go/src/CrownDaisy_GOGIN/app.ini"
 
 func TestAccountModel(t *testing.T) {
-	config.DefaultConfigPath = DefaultPath
-	db := db2.GetMysqlDB()
+	dbc := db.GetMysqlDB()
 	//am := &AccountModel{
 	//	Avatar:    "https://huangzijian.com/avatar.jpg",
 	//	Name:      "tommy-huang",

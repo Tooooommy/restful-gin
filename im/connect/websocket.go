@@ -1,10 +1,10 @@
 package connect
 
 import (
-	"CrownDaisy_GOGIN/im/config"
-	"CrownDaisy_GOGIN/logger"
 	"github.com/gorilla/websocket"
 	"net/http"
+	"restful-gin/im/config"
+	"restful-gin/logger"
 )
 
 type WebsocketHandler struct {

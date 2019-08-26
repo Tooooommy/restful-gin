@@ -1,14 +1,14 @@
 package account_controller
 
 import (
-	"CrownDaisy_GOGIN/config"
-	base_controller "CrownDaisy_GOGIN/controllers"
-	"CrownDaisy_GOGIN/helpers"
-	"CrownDaisy_GOGIN/helpers/define"
-	"CrownDaisy_GOGIN/libs/qq"
-	"CrownDaisy_GOGIN/libs/wechat"
 	"fmt"
 	"net/http"
+	"restful-gin/config"
+	base_controller "restful-gin/controllers"
+	"restful-gin/helpers"
+	"restful-gin/helpers/define"
+	"restful-gin/libs/qq"
+	"restful-gin/libs/wechat"
 
 	"github.com/gin-gonic/gin"
 )

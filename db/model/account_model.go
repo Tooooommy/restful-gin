@@ -1,8 +1,8 @@
 package model
 
 import (
-	"CrownDaisy_GOGIN/db"
 	"github.com/jinzhu/gorm"
+	"restful-gin/db"
 )
 
 type AccountModel struct {

@@ -1,11 +1,11 @@
 package base_controller
 
 import (
-	"CrownDaisy_GOGIN/db/model"
-	"CrownDaisy_GOGIN/helpers"
-	"CrownDaisy_GOGIN/helpers/define"
 	"github.com/appleboy/gin-jwt"
 	"github.com/gin-gonic/gin"
+	"restful-gin/db/model"
+	"restful-gin/helpers"
+	"restful-gin/helpers/define"
 	"strings"
 	"time"
 )

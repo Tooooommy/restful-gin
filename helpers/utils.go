@@ -1,10 +1,10 @@
 package helpers
 
 import (
-	"CrownDaisy_GOGIN/config"
 	"crypto/md5"
 	"github.com/satori/go.uuid"
 	"io"
+	"restful-gin/config"
 )
 
 func UUID() string {

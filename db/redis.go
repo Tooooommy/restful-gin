@@ -1,9 +1,9 @@
 package db
 
 import (
-	"CrownDaisy_GOGIN/config"
 	"fmt"
 	"github.com/gomodule/redigo/redis"
+	"restful-gin/config"
 	"strconv"
 	"time"
 )

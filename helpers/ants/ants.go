@@ -1,8 +1,8 @@
 package ants
 
 import (
-	"CrownDaisy_GOGIN/config"
 	"github.com/panjf2000/ants"
+	"restful-gin/config"
 )
 
 func InitAnts() {

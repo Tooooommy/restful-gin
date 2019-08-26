@@ -1,9 +1,9 @@
 package logger
 
 import (
-	"CrownDaisy_GOGIN/config"
 	"github.com/natefinch/lumberjack"
 	"os"
+	"restful-gin/config"
 	"time"
 
 	"go.uber.org/zap"

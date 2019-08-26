@@ -1,8 +1,6 @@
 package main
 
 import (
-	"CrownDaisy_GOGIN/config"
-	"CrownDaisy_GOGIN/db/database/migrations"
 	"flag"
 	"fmt"
 	"github.com/go-gormigrate/gormigrate"
@@ -10,6 +8,8 @@ import (
 	_ "github.com/jinzhu/gorm/dialects/mysql"
 	"log"
 	"os"
+	"restful-gin/config"
+	"restful-gin/db/database/migrations"
 	"strings"
 	"time"
 )
