@@ -35,7 +35,7 @@ func TestGDB(t *testing.T) {
 		t.Errorf("test init mysql error: %v", err)
 	}
 
-	db := GetMysqlDB()
+	db := GetGormAuto()
 	defer db.Close()
 
 	// == ping

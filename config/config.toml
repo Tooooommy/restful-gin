@@ -11,8 +11,8 @@ schema = "database_development"
 charset = "utf8mb4"
 loc = "Local"
 connection_timeout = 10
-max_idle_conns = 30
-max_open_conns = 10
+max_idle_conn = 30
+max_open_conn = 10
 max_conn_lifetime = 0
 
 [redis]

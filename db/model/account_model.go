@@ -19,11 +19,11 @@ type AccountModel struct {
 }
 
 func (m *AccountModel) GetTable() *gorm.DB {
-	return db.GetMysqlDB().Table("accounts")
+	return db.GetGormAuto().Table("accounts")
 }
 
 func (m *AccountModel) GetDB() *gorm.DB {
-	return db.GetMysqlDB()
+	return db.GetGormAuto()
 }
 
 func (m *AccountModel) Exist() {

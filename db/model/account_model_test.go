@@ -9,7 +9,7 @@ import (
 var DefaultPath = "/home/tommy/go/src/CrownDaisy_GOGIN/app.ini"
 
 func TestAccountModel(t *testing.T) {
-	dbc := db.GetMysqlDB()
+	db := db.GetGormAuto()
 	//am := &AccountModel{
 	//	Avatar:    "https://huangzijian.com/avatar.jpg",
 	//	Name:      "tommy-huang",

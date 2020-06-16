@@ -1,8 +1,9 @@
 package config
 
 import (
+	"fmt"
 	"github.com/spf13/viper"
-	"path"
+	"path/filepath"
 	"runtime"
 )
 
@@ -13,8 +14,8 @@ type Mysql struct {
 	Schema            string `json:"schema"`
 	Charset           string `json:"charset"`
 	Loc               string `json:"loc"`
-	MaxIdleConns      int    `json:"max_idle_conns"`
-	MaxOpenConns      int    `json:"max_open_conns"`
+	MaxIdleConn     int    `json:"max_idle_conns"`
+	MaxOpenConn      int    `json:"max_open_conns"`
 	MaxConnLifetime   int    `json:"max_conn_lifetime"`
 	ConnectionTimeout int    `json:"connection_timeout"`
 }
@@ -91,15 +92,14 @@ type Config struct {
 
 var (
 	cfg               *Config
-	defaultConfigFile = "config.toml"
-	defaultConfigType = "toml"
+	configFile = "config.toml"
 )
 
-func SetConfigFile(path string) {
-	defaultConfigFile = path
-}
-func SetConfigType(t string) {
-	defaultConfigType = t
+func init()  {
+	err := InitConfig()
+	if err != nil {
+		panic(fmt.Sprintf("init config: %v", err))
+	}
 }
 
 func Get() *Config {
@@ -108,19 +108,24 @@ func Get() *Config {
 	}
 	return cfg
 }
-func InitConfig() error {
-	cfg = new(Config)
-	viper.SetConfigType(defaultConfigType)
-	viper.SetConfigFile(defaultConfigFile)
+func InitConfig(path ...string) error {
+	if len(path) > 0 {
+		configFile = path[0]
+	}
+	cfg = &Config{}
+
+	viper.SetConfigType(filepath.Ext(configFile)[1:])
+	viper.SetConfigFile(configFile)
 	if err := viper.ReadInConfig(); err != nil {
 		_, file, _, _ := runtime.Caller(1)
-		defaultConfigFile = path.Dir(file) + "/conf/config." + defaultConfigType
-		viper.SetConfigFile(defaultConfigFile)
+		fmt.Print(filepath.Dir(file))
+		configFile = filepath.Join(filepath.Dir(file), configFile)
+		viper.SetConfigFile(configFile)
 		if err := viper.ReadInConfig(); err != nil {
 			return err
 		}
 	}
-	if err := viper.Unmarshal(&cfg); err != nil {
+	if err := viper.Unmarshal(cfg); err != nil {
 		return err
 	}
 	return nil

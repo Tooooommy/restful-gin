@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-var GDB *gorm.DB
+var gdb *gorm.DB
 
 func InitMysqlDB() (err error) {
 	// 数据库表默认名字
@@ -35,17 +35,17 @@ func InitMysqlDB() (err error) {
 	}
 	dbSource := fmt.Sprintf("%s:%s@tcp(%s)/%s?charset=%s&loc=%s&parseTime=true&timeout=%ds",
 		cfg.Username, cfg.Password, cfg.Host, cfg.Schema, cfg.Charset, cfg.Loc, cfg.ConnectionTimeout)
-	GDB, err = gorm.Open("mysql", dbSource)
+	gdb, err = gorm.Open("mysql", dbSource)
 	if err != nil {
 		return err
 	}
-	GDB.DB().SetConnMaxLifetime(time.Duration(cfg.MaxConnLifetime) * time.Second)
-	GDB.DB().SetMaxIdleConns(cfg.MaxIdleConns)
-	GDB.DB().SetMaxOpenConns(cfg.MaxOpenConns)
+	gdb.DB().SetConnMaxLifetime(time.Duration(cfg.MaxConnLifetime) * time.Second)
+	gdb.DB().SetMaxIdleConns(cfg.MaxIdleConn)
+	gdb.DB().SetMaxOpenConns(cfg.MaxOpenConn)
 	go func() {
 		for {
 			time.Sleep(10 * time.Second)
-			err := GDB.DB().Ping()
+			err := gdb.DB().Ping()
 			if err != nil {
 				fmt.Printf("database ping error: %+v\n", err)
 			}
@@ -54,11 +54,11 @@ func InitMysqlDB() (err error) {
 	return
 }
 
-func GetMysqlDB() *gorm.DB {
-	if GDB == nil {
+func GetGormAuto() *gorm.DB {
+	if gdb == nil {
 		if err := InitMysqlDB(); err != nil {
 			panic(nil)
 		}
 	}
-	return GDB
+	return gdb
 }
