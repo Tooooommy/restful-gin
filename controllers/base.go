@@ -1,21 +1,22 @@
 package base_ctl
 
 import (
-	"github.com/gin-contrib/cors"
-	"github.com/gin-gonic/gin"
 	"net/http"
-	"restful-gin/helpers"
 	"restful-gin/helpers/define"
 	"restful-gin/logger"
+	types "restful-gin/type"
 	"runtime/debug"
 	"time"
+
+	"github.com/gin-contrib/cors"
+	"github.com/gin-gonic/gin"
 )
 
 type BaseCtl struct {
 }
 
 func (b *BaseCtl) NotFound(c *gin.Context) {
-	c.JSON(http.StatusNotFound, helpers.ReturnResult(define.NotFoundPage, "page not found", nil))
+	c.JSON(http.StatusNotFound, types.ReturnResult(define.NotFoundPage, "page not found", nil))
 	return
 }
 
@@ -25,7 +26,7 @@ func (b *BaseCtl) MidRecovery() gin.HandlerFunc {
 			if r := recover(); r != nil {
 				logger.Sugar.Debugf("panic occurred: %+v", r)
 				logger.Sugar.Debug(debug.Stack())
-				if _, ok := r.(*helpers.Result); ok {
+				if _, ok := r.(*types.Result); ok {
 					c.JSON(http.StatusOK, r)
 					return
 				}
@@ -47,12 +48,12 @@ func (b *BaseCtl) MidCors() gin.HandlerFunc {
 	})
 }
 
-func (b *BaseCtl) Assert(bo bool, res *helpers.Result) {
-	helpers.Assert(bo, res)
+func (b *BaseCtl) Assert(bo bool, code int, message string, ds ...interface{}) {
+	types.Assert(bo, code, message, ds)
 }
 
-func (b *BaseCtl) CheckErr(err error, res *helpers.Result) {
-	helpers.CheckErr(err, res)
+func (b *BaseCtl) CheckErr(err error, cs ...int) {
+	types.CheckErr(err, cs...)
 }
 
 func (b *BaseCtl) GetAccountId(c *gin.Context) string {

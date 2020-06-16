@@ -1,7 +1,7 @@
 package main
 
 import (
-	"CrownDaisy_GOGIN/logger"
+	"restful-gin/logger"
 )
 
 func main() {

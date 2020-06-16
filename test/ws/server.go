@@ -1,9 +1,9 @@
 package main
 
 import (
-	"CrownDaisy_GOGIN/logger"
 	"golang.org/x/net/websocket"
 	"io"
+	"restful-gin/logger"
 )
 
 func EchoServer(ws *websocket.Conn) {

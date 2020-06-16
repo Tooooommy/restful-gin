@@ -1,13 +1,15 @@
 package base_ctl
 
 import (
-	"github.com/appleboy/gin-jwt/v2"
-	"github.com/gin-gonic/gin"
-	"restful-gin/db/model"
 	"restful-gin/helpers"
 	"restful-gin/helpers/define"
+	"restful-gin/model"
+	types "restful-gin/type"
 	"strings"
 	"time"
+
+	jwt "github.com/appleboy/gin-jwt/v2"
+	"github.com/gin-gonic/gin"
 )
 
 var Auth = initAuth()
@@ -60,7 +62,7 @@ func initAuth() *AuthCtl {
 func Authenticator(c *gin.Context) (interface{}, error) {
 	var params AccountParams
 	err := c.BindJSON(&params)
-	helpers.CheckErr(err, helpers.ReturnResult(define.MissBindValues, "miss bind values", nil))
+	types.CheckErr(err)
 
 	// username : name or email
 	var password = helpers.GenPwd(params.Password)
@@ -73,7 +75,7 @@ func Authenticator(c *gin.Context) (interface{}, error) {
 	}
 	account.Password = password
 	account, exist = account.GetAccount()
-	helpers.Assert(exist, helpers.ReturnResult(define.NotExistAccount, "account not exist", nil))
+	types.Assert(exist, define.NotExistAccount, "account not exist")
 	// 保存sessionID
 	sessionID := helpers.UUID()
 	account.SessionId = sessionID
@@ -93,7 +95,7 @@ func PayloadFunc(data interface{}) jwt.MapClaims {
 }
 
 func LoginResponse(c *gin.Context, code int, token string, expire time.Time) {
-	c.JSON(code, helpers.ReturnResult(define.Success, "success", &AccountResult{token, expire,}))
+	c.JSON(code, types.ReturnResult(define.Success, "success", &AccountResult{token, expire}))
 }
 
 //jwt flow
@@ -122,10 +124,9 @@ func Authorizator(data interface{}, c *gin.Context) bool {
 }
 
 func Unauthorized(c *gin.Context, code int, msg string) {
-	c.JSON(code, helpers.ReturnResult(define.AuthAccountInvalid, msg, nil))
+	c.JSON(code, types.ReturnResult(define.AuthAccountInvalid, msg, nil))
 }
 
 func RefreshResponse(c *gin.Context, code int, token string, expire time.Time) {
-	c.JSON(code, helpers.ReturnResult(define.Success, "success", &AccountResult{token, expire}))
+	c.JSON(code, types.ReturnResult(define.Success, "success", &AccountResult{token, expire}))
 }
-

@@ -59,7 +59,6 @@ func addRoutes(router *gin.Engine) {
 		authRouter.POST("/logout")
 	}
 
-
 	return
 }
 
