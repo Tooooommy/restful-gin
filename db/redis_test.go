@@ -43,11 +43,13 @@ func TestConnRedis(t *testing.T) {
 	conn := pool.Get()
 	if conn == nil {
 		t.Errorf("get connect from redis pool error: %v", conn)
+		return
 	}
 	defer conn.Close()
 	reply, err := conn.Do("PING")
 	if err != nil {
 		t.Errorf("redis conn error: %+v", err)
+		return
 	}
 	fmt.Println("ping return", reply)
 

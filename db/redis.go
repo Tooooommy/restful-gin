@@ -330,11 +330,11 @@ func (r *RedisDB) GetSubConn() redis.PubSubConn {
 	return conn
 }
 
-var RDB *RedisDB
+var rdb *RedisDB
 
 func InitRedisDB() error {
 	cfg := config.Get().Redis
-	RDB = &RedisDB{
+	rdb = &RedisDB{
 		Host:        cfg.Host,
 		Password:    cfg.Password,
 		Db:          cfg.Db,
@@ -343,10 +343,10 @@ func InitRedisDB() error {
 		IdleTimeout: cfg.IdleTimeout,
 		Wait:        cfg.Wait,
 	}
-	err := RDB.init()
+	err := rdb.init()
 	return err
 }
 
 func GetRedisDB() *RedisDB {
-	return RDB
+	return rdb
 }

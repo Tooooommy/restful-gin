@@ -14,10 +14,11 @@ func TestConnect(t *testing.T) {
 	source := fmt.Sprintf("%s:%s@tcp(%s)/%s?charset=%s&loc=%s&parseTime=true&timeout=%ds",
 		cfg.Username, cfg.Password, cfg.Host, cfg.Schema, cfg.Charset, cfg.Loc, cfg.ConnectionTimeout)
 	db, err := gorm.Open("mysql", source)
-	defer db.Close()
 	if err != nil {
 		t.Errorf("open mysql connnect error: %v", err)
+		return
 	}
+	defer db.Close()
 	if err := db.DB().Ping(); err != nil {
 		t.Errorf("ping error: %v", err)
 	}
