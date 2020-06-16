@@ -1,16 +1,16 @@
 package main
 
 import (
-	"github.com/swaggo/files"
+	"github.com/gin-gonic/gin"
 	"github.com/swaggo/gin-swagger"
+	"github.com/swaggo/gin-swagger/swaggerFiles"
 	"net/http"
 	"restful-gin/config"
 	"restful-gin/controllers"
 	"restful-gin/controllers/account_controller"
-	"restful-gin/logger"
-
-	"github.com/gin-gonic/gin"
 	_ "restful-gin/docs"
+	"restful-gin/logger"
+	"restful-gin/routes"
 )
 
 func init() {
@@ -34,56 +34,32 @@ func init() {
 		logger.Sugar.Panicf("init config error: %v", err)
 		panic(err)
 	}
-	// init jwt auth
-	auth, err = base_controller.InitAuth()
-	if err != nil {
-		logger.Sugar.Errorf("init auth error: %v", err)
-		panic(err)
-	}
-
 }
 
 var (
-	base    *base_controller.BaseCtl
-	auth    *base_controller.AuthCtl
-	account *account_controller.AccountCtl
+	base    *base_ctl.BaseCtl
 )
+var auth = base_ctl.Auth
 
 func addRoutes(router *gin.Engine) {
-	// set swagger
-	url := ginSwagger.URL("http://localhost:8080/swagger/doc.json")
-	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler, url))
-
-	// 设置跨域
-	router.Use(base.MidCors())
-
-	// 设置无人区404
-	router.NoRoute(base.NotFound)
-
-	apiRouter := router.Group("/api", base.MidRecovery)
-	// no jwt auth
+	v1 := router.Group("/v1", base.MidRecovery())
 	{
 		// login and refresh_token
-		apiRouter.POST("/account/login", auth.LoginHandler)
-		apiRouter.GET("/account/refresh", auth.RefreshHandler)
+		v1.POST("/account/login", auth.LoginHandler)
+		v1.GET("/account/refresh", auth.RefreshHandler)
 		// auth wechat and qq
-		apiRouter.GET("/account/auth/wechat", account.RedirectWeChatLoginPage)
-		apiRouter.GET("/account/auth/qqconnect", account.RedirectQQLoginPage)
+		//apiRouter.GET("/account/auth/wechat", account.RedirectWeChatLoginPage)
+		//apiRouter.GET("/account/auth/qqconnect", account.RedirectQQLoginPage)
 		//auth redirect
-		apiRouter.GET("/account/auth/wechat/callback", account.AuthWeChatCallback)
-		apiRouter.GET("/account/auth/qq/callback", account.AuthQQCallback)
-		// recommend book
+		//apiRouter.GET("/account/auth/wechat/callback", account.AuthWeChatCallback)
+		//apiRouter.GET("/account/auth/qq/callback", account.AuthQQCallback)
 	}
-	// jwt auth
-	authRouter := apiRouter.Group("/auth", auth.MiddlewareFunc())
+	authRouter := v1.Group("/auth", auth.MiddlewareFunc())
 	{
 		authRouter.POST("/logout")
 	}
 
-	if err := http.ListenAndServe(config.Get().App.Port, router); err != nil {
-		logger.Sugar.Debugf("http router listen error: %+v", err)
-		panic(err)
-	}
+
 	return
 }
 
@@ -102,5 +78,16 @@ func addRoutes(router *gin.Engine) {
 // @host petstore.swagger.io
 // @BasePath /v2
 func main() {
-	addRoutes(gin.Default())
+	router := gin.Default()
+	// set swagger
+	url := ginSwagger.URL("http://localhost:8080/swagger/doc.json")
+	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler, url))
+	router.NoRoute(base.NotFound)
+	router.NoMethod(base.NotFound)
+	router.Use(base.MidCors())
+	addRoutes(router)
+	if err := http.ListenAndServe(config.Get().App.Port, router); err != nil {
+		logger.Sugar.Debugf("http router listen error: %+v", err)
+		panic(err)
+	}
 }

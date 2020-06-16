@@ -1,4 +1,4 @@
-package base_controller
+package base_ctl
 
 import (
 	"github.com/gin-contrib/cors"
@@ -19,18 +19,20 @@ func (b *BaseCtl) NotFound(c *gin.Context) {
 	return
 }
 
-func (b *BaseCtl) MidRecovery(c *gin.Context) {
-	defer func() {
-		if r := recover(); r != nil {
-			logger.Sugar.Debugf("panic occurred: %+v", r)
-			logger.Sugar.Debug(debug.Stack())
-			if _, ok := r.(*helpers.Result); ok {
-				c.JSON(http.StatusOK, r)
-				return
+func (b *BaseCtl) MidRecovery() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		defer func() {
+			if r := recover(); r != nil {
+				logger.Sugar.Debugf("panic occurred: %+v", r)
+				logger.Sugar.Debug(debug.Stack())
+				if _, ok := r.(*helpers.Result); ok {
+					c.JSON(http.StatusOK, r)
+					return
+				}
 			}
-		}
-	}()
-	c.Next()
+		}()
+		c.Next()
+	}
 }
 
 func (b *BaseCtl) MidCors() gin.HandlerFunc {

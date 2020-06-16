@@ -1,7 +1,7 @@
-package base_controller
+package base_ctl
 
 import (
-	"github.com/appleboy/gin-jwt"
+	"github.com/appleboy/gin-jwt/v2"
 	"github.com/gin-gonic/gin"
 	"restful-gin/db/model"
 	"restful-gin/helpers"
@@ -10,13 +10,15 @@ import (
 	"time"
 )
 
+var Auth = initAuth()
+
 type AuthCtl struct {
 	*BaseCtl
 	*jwt.GinJWTMiddleware
 }
 
 type AccountParams struct {
-	UserName  string `json:"user_name"`
+	Username  string `json:"username"` // 用户名字
 	Password  string `json:"password"`
 	SessionID string `json:"-"`
 }
@@ -26,7 +28,7 @@ type AccountResult struct {
 	Expire      time.Time
 }
 
-func InitAuth() (*AuthCtl, error) {
+func initAuth() *AuthCtl {
 	jwtMid, err := jwt.New(&jwt.GinJWTMiddleware{
 		Realm:            "zero zone",
 		SigningAlgorithm: "HS512",
@@ -34,7 +36,7 @@ func InitAuth() (*AuthCtl, error) {
 		Timeout:          24 * time.Hour,
 		MaxRefresh:       1 * time.Hour,
 		Authenticator:    Authenticator,
-		Authorizator:     Authorization,
+		Authorizator:     Authorizator,
 		PayloadFunc:      PayloadFunc,
 		Unauthorized:     Unauthorized,
 		LoginResponse:    LoginResponse,
@@ -45,30 +47,29 @@ func InitAuth() (*AuthCtl, error) {
 		TokenHeadName:    "Bearer",
 		TimeFunc:         time.Now,
 	})
-	return &AuthCtl{new(BaseCtl), jwtMid}, err
+	if err != nil {
+		panic(err)
+	}
+	return &AuthCtl{new(BaseCtl), jwtMid}
 }
 
 // login flow
 // authenticator
 // Payload func
 // login response
-
 func Authenticator(c *gin.Context) (interface{}, error) {
-	var accountParams AccountParams
-	// get account json from web
-	// get verify account from database
-	// gen uuid session id into redis
-	err := c.BindJSON(&accountParams)
+	var params AccountParams
+	err := c.BindJSON(&params)
 	helpers.CheckErr(err, helpers.ReturnResult(define.MissBindValues, "miss bind values", nil))
 
 	// username : name or email
-	var password = helpers.GenPwd(accountParams.Password)
+	var password = helpers.GenPwd(params.Password)
 	var account = &model.AccountModel{}
 	var exist = false
-	if strings.Contains(accountParams.UserName, "@") {
-		account.Email = accountParams.UserName
+	if strings.Contains(params.Username, "@") {
+		account.Email = params.Username
 	} else {
-		account.Name = accountParams.UserName
+		account.Name = params.Username
 	}
 	account.Password = password
 	account, exist = account.GetAccount()
@@ -76,15 +77,15 @@ func Authenticator(c *gin.Context) (interface{}, error) {
 	// 保存sessionID
 	sessionID := helpers.UUID()
 	account.SessionId = sessionID
-	accountParams.SessionID = sessionID
-	accountParams.UserName = account.Name
-	return accountParams, nil
+	params.SessionID = sessionID
+	params.Username = account.Name
+	return params, nil
 }
 
 func PayloadFunc(data interface{}) jwt.MapClaims {
 	if account, ok := data.(AccountParams); ok {
 		return jwt.MapClaims{
-			"account": account.UserName,
+			"account": account.Username,
 			"session": account.SessionID,
 		}
 	}
@@ -92,29 +93,26 @@ func PayloadFunc(data interface{}) jwt.MapClaims {
 }
 
 func LoginResponse(c *gin.Context, code int, token string, expire time.Time) {
-	c.JSON(code, helpers.ReturnResult(define.Success, "success", &AccountResult{
-		token, expire,
-	}))
+	c.JSON(code, helpers.ReturnResult(define.Success, "success", &AccountResult{token, expire,}))
 }
 
 //jwt flow
 //IdentityHandler
 //Authorization
 //Unauthorized
-
 func IdentityHandler(c *gin.Context) interface{} {
 	// 验证 session 是否一样
 	claims := jwt.ExtractClaims(c)
 	return &AccountParams{
-		UserName:  claims["account"].(string),
+		Username:  claims["account"].(string),
 		SessionID: claims["session"].(string),
 	}
 }
 
-func Authorization(data interface{}, c *gin.Context) bool {
-	if accountParams, ok := data.(AccountParams); ok {
+func Authorizator(data interface{}, c *gin.Context) bool {
+	if params, ok := data.(AccountParams); ok {
 		// 判断session是否一致
-		account := model.AccountModel{Name: accountParams.UserName, SessionId: accountParams.SessionID}
+		account := model.AccountModel{Name: params.Username, SessionId: params.SessionID}
 		_, exist := account.GetAccount()
 		c.Set("account_id", account.UniqueId)
 		c.Set("session_id", account.SessionId)
@@ -131,30 +129,3 @@ func RefreshResponse(c *gin.Context, code int, token string, expire time.Time) {
 	c.JSON(code, helpers.ReturnResult(define.Success, "success", &AccountResult{token, expire}))
 }
 
-const AccessTokenType = "Bearer"
-
-func (auth *AuthCtl) MidJwt() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		accessToken := auth.GetAccessToken(c)
-		claims, err := helpers.ParseAccessToken(accessToken)
-		helpers.CheckErr(err, helpers.ReturnResult(define.AccessTokenInvalid, "access token invalid", nil))
-		c.Set("account_id", claims.AccountID)
-		c.Set("session_id", claims.SessionID)
-		c.Next()
-	}
-}
-
-func (auth *AuthCtl) GetAccessToken(c *gin.Context) string {
-	var accessToken string
-	tokenHeader := c.GetHeader("Authorization")
-	if tokenHeader != "" {
-		tokenParts := strings.Split(tokenHeader, " ")
-		helpers.Assert(len(tokenParts) == 2, helpers.ReturnResult(define.AccessTokenInvalid, "access token too short.", nil))
-		helpers.Assert(tokenParts[0] == AccessTokenType, helpers.ReturnResult(define.AccessTokenInvalid, "access token is not bear.", nil))
-		accessToken = tokenParts[1]
-	} else {
-		accessToken = c.Query("access_token")
-	}
-	helpers.Assert(len(accessToken) > 0, helpers.ReturnResult(define.AccessTokenInvalid, "access token is empty.", nil))
-	return accessToken
-}
