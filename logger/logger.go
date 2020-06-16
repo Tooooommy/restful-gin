@@ -38,19 +38,6 @@ func TimeEncoder(t time.Time, enc zapcore.PrimitiveArrayEncoder) {
 
 func InitLogger() {
 	cfg := config.Get().Logger
-	if cfg.Output == "" {
-		cfg.Output = "log/im.log"
-	}
-	if cfg.MaxAge == 0 {
-		cfg.MaxAge = 28
-	}
-	if cfg.MaxSize == 0 {
-		cfg.MaxSize = 500
-	}
-	if cfg.MaxBackups == 0 {
-		cfg.MaxBackups = 3
-	}
-
 	w := zapcore.AddSync(&lumberjack.Logger{
 		Filename:   cfg.Output,
 		MaxSize:    cfg.MaxSize, // megabytes
