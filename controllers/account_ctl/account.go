@@ -1,4 +1,4 @@
-package account_controller
+package account_ctl
 
 import (
 	"fmt"

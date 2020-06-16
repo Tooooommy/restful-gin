@@ -7,10 +7,9 @@ import (
 	"net/http"
 	"restful-gin/config"
 	"restful-gin/controllers"
-	"restful-gin/controllers/account_controller"
+	"restful-gin/controllers/account_ctl"
 	_ "restful-gin/docs"
 	"restful-gin/logger"
-	"restful-gin/routes"
 )
 
 func init() {
@@ -38,6 +37,7 @@ func init() {
 
 var (
 	base    *base_ctl.BaseCtl
+	account *account_ctl.AccountCtl
 )
 var auth = base_ctl.Auth
 
